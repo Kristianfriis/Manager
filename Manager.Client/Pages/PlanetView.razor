@@ -1,0 +1,151 @@
+@page "/planet/{PlanetId:int}"
+@using Manager.Client.Services
+@implements IDisposable
+@inject GameService GameService
+@inject NavigationManager Navigation
+
+<PageTitle>@(planet?.Name ?? "Planet")</PageTitle>
+
+<RadzenLink Path="/planets">← Back to Planets</RadzenLink>
+
+@if (error is not null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger">@error</RadzenAlert>
+}
+
+@if (planet is not null)
+{
+    <RadzenCard class="rz-mb-4">
+        <RadzenStack>
+            <h2>@planet.Name</h2>
+            <RadzenBadge>Population: @planet.Population</RadzenBadge>
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenCard class="rz-mb-4">
+        <RadzenRow>
+            @foreach (var res in planet.Resources)
+            {
+                <RadzenColumn Size="3">
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="4">
+                        <strong>@res.Type:</strong>
+                        <RadzenBadge>@res.Amount</RadzenBadge>
+                    </RadzenStack>
+                </RadzenColumn>
+            }
+        </RadzenRow>
+    </RadzenCard>
+
+    <RadzenRow>
+        @foreach (var prod in planet.ResourceProductions)
+        {
+            <RadzenColumn Size="6">
+                <RadzenCard>
+                    <RadzenStack>
+                        <h3>@prod.Type Production</h3>
+                        <RadzenBadge>Level @prod.Level</RadzenBadge>
+                        <RadzenBadge>@prod.AmountPerHour / hour</RadzenBadge>
+                        <RadzenBadge>@prod.PerMinute.ToString("F1") / min</RadzenBadge>
+                        <RadzenBadge BadgeStyle="BadgeStyle.Danger">
+                            Upgrade: @prod.MetalToUpgrade Metal + @prod.EnergyNeededForUpgrade Energy
+                        </RadzenBadge>
+                        <RadzenButton Text="Upgrade"
+                                      Click="@(() => Upgrade(prod))"
+                                      Disabled="@(!CanAfford(prod))" />
+                    </RadzenStack>
+                </RadzenCard>
+            </RadzenColumn>
+        }
+    </RadzenRow>
+}
+else if (!loading)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning">Planet not found.</RadzenAlert>
+}
+
+@code {
+    [Parameter] public int PlanetId { get; set; }
+
+    PlanetDto? planet;
+    string? error;
+    bool loading = true;
+    CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlanetAsync();
+        _cts = new CancellationTokenSource();
+        _ = PollAsync(_cts.Token);
+    }
+
+    async Task LoadPlanetAsync()
+    {
+        error = null;
+        loading = true;
+        try
+        {
+            planet = await GameService.GetPlanetAsync(PlanetId);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        while (await timer.WaitForNextTickAsync(ct))
+        {
+            try
+            {
+                var result = await GameService.CollectAsync(PlanetId);
+                if (result is not null)
+                {
+                    planet = result;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    bool CanAfford(ResourceProductionDto prod)
+    {
+        var metal = planet?.Resources.FirstOrDefault(r => r.Type == ResourceType.Metal);
+        var energy = planet?.Resources.FirstOrDefault(r => r.Type == ResourceType.Energy);
+        if (metal is null || energy is null) return false;
+        return metal.Amount >= prod.MetalToUpgrade && energy.Amount >= prod.EnergyNeededForUpgrade;
+    }
+
+    async Task Upgrade(ResourceProductionDto prod)
+    {
+        error = null;
+        try
+        {
+            var result = await GameService.UpgradeAsync(PlanetId, prod.Type);
+            if (result is not null)
+                planet = result;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            error = "Not enough resources to upgrade.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

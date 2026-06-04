@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Manager.Api.Models;
 using Manager.Shared.Dtos;
 using FluentResults;
+using Manager.Api.Data.Errors;
 
 namespace Manager.Api.Data;
 
@@ -42,8 +43,10 @@ public class GameService(GameDbContext context)
         var metal = entity.Resources.FirstOrDefault(r => r.Type == ResourceType.Metal);
         var energy = entity.Resources.FirstOrDefault(r => r.Type == ResourceType.Energy);
 
-        if (metal == null || energy == null) return Result.Fail("Insufficient resources");
-        if (metal.Amount < prod.MetalToUpgrade || energy.Amount < prod.EnergyNeededForUpgrade) return Result.Fail("Insufficient resources");
+        if (metal == null || energy == null) 
+            return new InsufficientFundsError();
+        if (metal.Amount < prod.MetalToUpgrade || energy.Amount < prod.EnergyNeededForUpgrade) 
+            return new InsufficientFundsError();
 
         metal.Amount -= (int)prod.MetalToUpgrade;
         energy.Amount -= (int)prod.EnergyNeededForUpgrade;
@@ -87,4 +90,11 @@ public class GameService(GameDbContext context)
             EnergyNeededForUpgrade = entity.EnergyNeededForUpgrade
         };
     }
+
+    internal async Task<IEnumerable<PlanetLookupDto>> ListPlanetsAsync()
+    {
+        var planets = await context.Planets.Select(p => new PlanetLookupDto { Id = p.Id, Name = p.Name }).ToListAsync();
+        return planets;
+    }
+
 }

@@ -1,8 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Manager.Api.Data;
 using Manager.Shared.Dtos;
+using Manager.Api.Data.Errors;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.WithOrigins("https://localhost:7182", "http://localhost:5071")
+     .AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddDbContext<GameDbContext>(o =>
     o.UseSqlite("Data Source=manager.db"));
@@ -18,12 +23,19 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
+app.UseCors();
 app.UseHttpsRedirection();
+
+app.MapGet("/api/planets", async (GameService service) =>
+{
+    var planets = await service.ListPlanetsAsync();
+    return Results.Ok(planets);
+});
 
 app.MapGet("/api/planets/{id:int}", async (int id, GameService service) =>
 {
     var planet = await service.GetPlanetAsync(id);
-    return planet is null ? Results.NotFound() : Results.Ok(planet);
+    return planet is null ? Results.NotFound() : Results.Ok(planet.Value);
 });
 
 app.MapPost("/api/planets", async (CreatePlanetRequest req, GameService service) =>
@@ -45,6 +57,10 @@ app.MapPost("/api/planets/{id:int}/collect", async (int id, GameService service)
 app.MapPost("/api/planets/{id:int}/upgrade", async (int id, UpgradeRequest req, GameService service) =>
 {
     var planetResult = await service.UpgradeAsync(id, req.ResourceType);
+
+    if(planetResult.HasError<InsufficientFundsError>())
+        return Results.BadRequest("Not enough resources to upgrade");
+
     return planetResult.IsSuccess
         ? Results.Ok(planetResult.Value)
         : Results.NotFound();

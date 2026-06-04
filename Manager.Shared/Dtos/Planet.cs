@@ -37,3 +37,9 @@ public class ResourceProductionDto
     public long EnergyConsumption { get; set; }
     public long EnergyNeededForUpgrade { get; set; }
 }
+
+public class PlanetLookupDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "Unnamed Planet";
+}

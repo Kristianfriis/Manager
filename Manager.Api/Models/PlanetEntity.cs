@@ -43,7 +43,7 @@ public class ProductionEntity
     public ResourceType Type { get; set; }
     public int Level { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
-    private int BaseProduction { get; } = 0;
+    public int BaseProduction { get; set; }
     public int AmountPerHour => Level * BaseProduction;
     public int PerMinute => (int)Math.Ceiling(AmountPerHour / 60.0);
     public long MetalToUpgrade => (long)Math.Pow(2, Level) * 100;

@@ -1,0 +1,65 @@
+@page "/planets"
+@using Manager.Client.Services
+@inject GameService GameService
+@inject NavigationManager Navigation
+
+<PageTitle>Planets</PageTitle>
+
+<h2>Planets</h2>
+
+<RadzenRow>
+
+    @foreach (var planet in planets)
+    {
+        <RadzenColumn Size="6">
+            <RadzenCard Style="cursor: pointer"">
+                <RadzenStack>
+                    <RadzenTextBox @bind-Value="@planet.Name" Placeholder="Planet name" Disabled="true" />
+                    <RadzenButton Text="Visit" Click="@(() => VisitPlanet(planet.Id))" />
+                </RadzenStack>
+            </RadzenCard>
+        </RadzenColumn>
+    }
+
+    <RadzenColumn Size="6">
+        <RadzenCard>
+            <RadzenStack>
+                <h3>Create Planet</h3>
+                <RadzenTextBox @bind-Value="@newPlanetName" Placeholder="Planet name" />
+                <RadzenButton Text="Create" Click="@CreatePlanet"
+                              Disabled="@(string.IsNullOrWhiteSpace(newPlanetName) || creating)" />
+            </RadzenStack>
+        </RadzenCard>
+    </RadzenColumn>
+</RadzenRow>
+
+@code {
+    string newPlanetName = "";
+    bool creating;
+    IEnumerable<PlanetLookupDto> planets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        planets = await GameService.ListPlanetsAsync();
+    }
+
+    async Task CreatePlanet()
+    {
+        creating = true;
+        try
+        {
+            var planet = await GameService.CreatePlanetAsync(newPlanetName);
+            if (planet is not null)
+                Navigation.NavigateTo($"/planet/{planet.Id}");
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+
+    void VisitPlanet(int id)
+    {
+        Navigation.NavigateTo($"/planet/{id}");
+    }
+}
