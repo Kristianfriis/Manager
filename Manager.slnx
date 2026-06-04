@@ -1,0 +1,6 @@
+<Solution>
+    <Project Path="Manager.Client/Manager.Client.csproj" />
+    <Project Path="Manager.Shared.Tests/Manager.Shared.Tests.csproj" />
+    <Project Path="Manager.Shared/Manager.Shared.csproj" />
+    <Project Path="Manager.Api/Manager.Api.csproj" />
+</Solution>

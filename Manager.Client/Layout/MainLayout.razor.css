@@ -1,0 +1,33 @@
+.layout-container {
+    display: flex;
+    height: 100vh;
+}
+
+.layout-sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--rz-surface);
+    border-right: 1px solid var(--rz-border-color);
+    overflow-y: auto;
+}
+
+.layout-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.layout-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0.5rem 1.5rem;
+    border-bottom: 1px solid var(--rz-border-color);
+    background: var(--rz-base-50);
+}
+
+.layout-content {
+    flex: 1;
+    padding: 1.5rem;
+}

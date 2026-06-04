@@ -1,0 +1,61 @@
+﻿@page "/weather"
+@inject HttpClient Http
+
+<PageTitle>Weather</PageTitle>
+
+<h2>Weather</h2>
+
+<RadzenText TextStyle="@TextStyle.Body1">This component demonstrates fetching data from the server.</RadzenText>
+
+@if (forecasts == null)
+{
+    <RadzenText TextStyle="@TextStyle.Body2">Loading...</RadzenText>
+}
+else
+{
+    <RadzenCard class="rz-mt-4">
+        <RadzenText TextStyle="@TextStyle.H5">Weather Forecast</RadzenText>
+        <RadzenText TextStyle="@TextStyle.Subtitle2" class="rz-mb-4">5-day weather forecast data</RadzenText>
+        <RadzenTable>
+            <RadzenTableHeader>
+                <RadzenTableRow>
+                    <RadzenTableHeaderCell>Date</RadzenTableHeaderCell>
+                    <RadzenTableHeaderCell aria-label="Temperature in Celsius">Temp. (C)</RadzenTableHeaderCell>
+                    <RadzenTableHeaderCell aria-label="Temperature in Fahrenheit">Temp. (F)</RadzenTableHeaderCell>
+                    <RadzenTableHeaderCell>Summary</RadzenTableHeaderCell>
+                </RadzenTableRow>
+            </RadzenTableHeader>
+            <RadzenTableBody>
+                @foreach (var forecast in forecasts!)
+                {
+                    <RadzenTableRow>
+                        <RadzenTableCell>@forecast.Date.ToShortDateString()</RadzenTableCell>
+                        <RadzenTableCell>@forecast.TemperatureC</RadzenTableCell>
+                        <RadzenTableCell>@forecast.TemperatureF</RadzenTableCell>
+                        <RadzenTableCell>@forecast.Summary</RadzenTableCell>
+                    </RadzenTableRow>
+                }
+            </RadzenTableBody>
+        </RadzenTable>
+    </RadzenCard>
+}
+
+@code {
+    private WeatherForecast[]? forecasts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        forecasts = await Http.GetFromJsonAsync<WeatherForecast[]>("sample-data/weather.json");
+    }
+
+    public class WeatherForecast
+    {
+        public DateOnly Date { get; set; }
+
+        public int TemperatureC { get; set; }
+
+        public string? Summary { get; set; }
+
+        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    }
+}
