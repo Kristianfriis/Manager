@@ -1,0 +1,56 @@
+@page "/sectors"
+@using Manager.Client.Services
+@inject GameService GameService
+@inject AppState AppState
+@inject NavigationManager Navigation
+
+<PageTitle>Sectors</PageTitle>
+
+<h2>Sectors</h2>
+
+@if (sectors is null)
+{
+    <MudText Typo="Typo.body2">Loading...</MudText>
+}
+else
+{
+    <MudGrid>
+        @foreach (var sector in sectors)
+        {
+            <MudItem xs="12" md="6">
+                <MudCard OnClick="@(() => Navigation.NavigateTo($"/sector/{sector.Id}"))" Class="cursor-pointer">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h5">@sector.Name</MudText>
+                        <MudStack Row="true" Spacing="2">
+                            <span class="mud-chip mud-chip-text mud-chip-color-info">@sector.ZoneCount zones</span>
+                            <span class="mud-chip mud-chip-text mud-chip-color-success">@sector.ClaimedCount claimed</span>
+                        </MudStack>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo($"/sector/{sector.Id}"))">View Sector</MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    List<SectorDto>? sectors;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AppState.PlayerName))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        sectors = await GameService.ListSectorsAsync();
+    }
+
+    async Task LoadSectors()
+    {
+        sectors = await GameService.ListSectorsAsync();
+    }
+}

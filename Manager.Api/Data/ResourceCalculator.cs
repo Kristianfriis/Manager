@@ -5,7 +5,7 @@ namespace Manager.Api.Data;
 
 public static class ResourceCalculator
 {
-    public static void Recalculate(PlanetEntity planet)
+    public static void Recalculate(PlanetEntity planet, List<(ResourceType, int)>? boosts = null)
     {
         var now = DateTimeOffset.UtcNow;
         // Snap the current time to the current whole minute (dropping seconds/milliseconds)
@@ -32,6 +32,20 @@ public static class ResourceCalculator
             // Since elapsed is snapped to whole minutes, TotalMinutes will be a clean integer (1.0, 2.0, etc.)
             var minutesGained = Math.Floor(elapsed.TotalMinutes);
             var gained = prod.PerMinute * minutesGained;
+
+            // Apply any boosts
+            if (boosts != null)
+            {
+                for (int i = 0; i < boosts.Count; i++)
+                {
+                    var (type, boostPercent) = boosts[i];
+                    if (type == prod.Type)
+                    {
+                        var boostAmount = gained * boostPercent;
+                        gained += boostAmount;
+                    }
+                }
+            }
 
             var resource = planet.Resources
                 .FirstOrDefault(r => r.Type == prod.Type);

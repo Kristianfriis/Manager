@@ -33,4 +33,34 @@ public class GameService(IHttpClientFactory httpFactory)
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PlanetDto>();
     }
+
+    public async Task<List<SectorDto>> ListSectorsAsync() =>
+        await Api.GetFromJsonAsync<List<SectorDto>>("api/sectors") ?? [];
+
+    public async Task<SectorDetailDto?> GetSectorAsync(int id) =>
+        await Api.GetFromJsonAsync<SectorDetailDto>($"api/sectors/{id}");
+
+    public async Task<ZoneDto?> ClaimZoneAsync(int zoneId, string playerName)
+    {
+        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/claim", new { playerName });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ZoneDto>();
+    }
+
+    public async Task<AttackResultDto?> AttackZoneAsync(int zoneId, string playerName, int shipCount)
+    {
+        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/attack", new { playerName, shipCount });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<AttackResultDto>();
+    }
+
+    public async Task<PlayerDto?> GetPlayerAsync(string name) =>
+        await Api.GetFromJsonAsync<PlayerDto>($"api/players/{name}");
+
+    public async Task<PlayerDto?> BuildShipsAsync(string playerName, int count)
+    {
+        var response = await Api.PostAsJsonAsync($"api/players/{playerName}/build-ships", new { count });
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlayerDto>();
+    }
 }

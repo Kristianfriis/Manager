@@ -14,13 +14,19 @@ builder.Services.AddDbContext<GameDbContext>(o =>
     o.UseSqlite("Data Source=manager.db"));
 
 builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<SectorService>();
+builder.Services.AddScoped<PlayerService>();
 builder.Services.AddOpenApi();
 builder.AddServiceDefaults();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
-    scope.ServiceProvider.GetRequiredService<GameDbContext>().Database.EnsureCreated();
+{
+    var ctx = scope.ServiceProvider.GetRequiredService<GameDbContext>();
+    ctx.Database.EnsureCreated();
+    SectorService.Seed(ctx);
+}
 
 app.UseCors();
 app.UseHttpsRedirection();
@@ -67,6 +73,48 @@ app.MapPost("/api/planets/{id:int}/upgrade", async (int id, UpgradeRequest req, 
         : Results.NotFound();
 });
 
+app.MapGet("/api/sectors", async (SectorService service) =>
+{
+    var sectors = await service.ListSectorsAsync();
+    return Results.Ok(sectors);
+});
+
+app.MapGet("/api/sectors/{id:int}", async (int id, SectorService service) =>
+{
+    var sector = await service.GetSectorAsync(id);
+    return sector.IsSuccess ? Results.Ok(sector.Value) : Results.NotFound();
+});
+
+app.MapPost("/api/zones/{id:int}/claim", async (int id, ClaimRequest req, SectorService service) =>
+{
+    var result = await service.ClaimZoneAsync(id, req.PlayerName);
+    return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors.First().Message);
+});
+
+app.MapPost("/api/zones/{id:int}/attack", async (int id, AttackRequest req, SectorService service) =>
+{
+    var result = await service.AttackZoneAsync(id, req.PlayerName, req.ShipCount);
+    return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors.First().Message);
+});
+
+app.MapGet("/api/players/{name}", async (string name, PlayerService service) =>
+{
+    var player = await service.GetPlayerAsync(name);
+    return player.IsSuccess ? Results.Ok(player.Value) : Results.NotFound();
+});
+
+app.MapPost("/api/players/{name}", async (string name, PlayerService service) =>
+{
+    var player = await service.CreatePlayerAsync(name);
+    return player.IsSuccess ? Results.Ok(player.Value) : Results.BadRequest(player.Errors[0].Message);
+});
+
+app.MapPost("/api/players/{name}/build-ships", async (string name, BuildShipsRequest req, SectorService service) =>
+{
+    var result = await service.BuildShipsAsync(name, req.Count);
+    return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Errors.First().Message);
+});
+
 app.MapOpenApi();
 app.MapScalarApiReference();
 
@@ -74,3 +122,6 @@ app.Run();
 
 record CreatePlanetRequest(string Name);
 record UpgradeRequest(ResourceType ResourceType);
+record ClaimRequest(string PlayerName);
+record AttackRequest(string PlayerName, int ShipCount);
+record BuildShipsRequest(int Count);

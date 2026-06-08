@@ -1,0 +1,228 @@
+@page "/sector/{SectorId:int}"
+@using Manager.Client.Services
+@inject GameService GameService
+@inject AppState AppState
+@inject NavigationManager Navigation
+
+<PageTitle>@(sector?.Name ?? "Sector")</PageTitle>
+
+<MudLink Href="/sectors">← Back to Sectors</MudLink>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <MudAlert Severity="@severity" Class="mt-4 mb-4" Dismissible="true">
+        @message
+    </MudAlert>
+}
+
+@if (sector is not null)
+{
+    <MudText Typo="Typo.h4" Class="mt-4">@sector.Name</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">Claim zones and send ships to attack enemy-held territory. Outer rings are weaker — fight your way to the center for the biggest boosts!</MudText>
+
+    @foreach (var ring in RingsInOrder)
+    {
+        var zones = sector.Zones.Where(z => z.Ring == ring).ToList();
+        if (zones.Count == 0) continue;
+
+        var boostPct = zones.First().BoostPercentage * 100;
+
+        <MudText Typo="Typo.subtitle1" Class="mt-6 mb-2 mud-text-secondary">
+            Ring @ring @(ring == 0 ? "(Center — Best)" : "") — @boostPct% Boost
+        </MudText>
+
+        <div class="ring-row @(ring == 0 ? "ring-center" : "") @(ring == 3 ? "ring-outer" : "")">
+            @foreach (var zone in zones)
+            {
+                <MudCard Class="zone-card" Outlined="true">
+                    <MudCardContent>
+                        <span class="mud-chip mud-chip-text mud-chip-color-@BoostCssClass(zone.BoostType) mb-2">
+                            @zone.BoostType +@(zone.BoostPercentage * 100)%
+                        </span>
+
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                            R@(zone.Ring)-P@(zone.Position)
+                        </MudText>
+
+                        <MudDivider Class="my-2" />
+
+                        @if (zone.IsClaimed)
+                        {
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                                @zone.OwnerName
+                            </MudText>
+                            <MudText Typo="Typo.body2">
+                                <MudIcon Icon="@Icons.Material.Filled.Rocket" Size="Size.Small" />
+                                @zone.ShipCount ships
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-success-text">Unclaimed</MudText>
+                            <MudText Typo="Typo.body2">0 ships</MudText>
+                        }
+
+                        @if (!zone.IsClaimed)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                       OnClick="@(() => ClaimZone(zone.Id))"
+                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName))"
+                                       FullWidth="true" Class="mt-2">
+                                Claim (1 ship)
+                            </MudButton>
+                        }
+                        else if (zone.OwnerName != AppState.PlayerName)
+                        {
+                            <MudNumericField @bind-Value="attackShips[zone.Id]"
+                                             Label="Ships"
+                                             Min="1"
+                                             Max="9999"
+                                             Variant="Variant.Outlined"
+                                             Class="mt-2" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                       OnClick="@(() => AttackZone(zone.Id))"
+                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName))"
+                                       FullWidth="true">
+                                Attack
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Default"
+                                       Disabled="true"
+                                       FullWidth="true" Class="mt-2">
+                                Yours
+                            </MudButton>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </div>
+    }
+
+    <MudPaper Class="pa-4 mt-6">
+        <MudText Typo="Typo.h6">Your Fleet</MudText>
+        <MudStack Row="true" Spacing="4" Class="mt-2">
+            <MudText Typo="Typo.body1">
+                <MudIcon Icon="@Icons.Material.Filled.Rocket" Class="mud-primary-text" /> @(player?.ShipCount ?? 0) ships
+            </MudText>
+            <MudText Typo="Typo.body1">
+                <MudIcon Icon="@Icons.Material.Filled.Hardware" Class="mud-warning-text" /> @(player?.Metal ?? 0) metal
+            </MudText>
+        </MudStack>
+        @if (player is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Claiming costs 1 ship. Attacking costs however many you send.</MudText>
+        }
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo("/fleet"))" Class="mt-2">
+            Manage Fleet →
+        </MudButton>
+    </MudPaper>
+}
+else if (!loading)
+{
+    <MudAlert Severity="Severity.Warning" Class="mt-4">Sector not found.</MudAlert>
+}
+
+@code {
+    [Parameter] public int SectorId { get; set; }
+
+    SectorDetailDto? sector;
+    PlayerDto? player;
+    string? message;
+    Severity severity = Severity.Normal;
+    bool loading = true;
+    readonly Dictionary<int, int> attackShips = [];
+
+    static readonly int[] RingsInOrder = [3, 2, 1, 0];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AppState.PlayerName))
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            sector = await GameService.GetSectorAsync(SectorId);
+            if (sector is not null)
+            {
+                foreach (var zone in sector.Zones)
+                    attackShips[zone.Id] = 1;
+
+                if (!string.IsNullOrWhiteSpace(AppState.PlayerName))
+                    player = await GameService.GetPlayerAsync(AppState.PlayerName);
+            }
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            severity = Severity.Error;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    async Task ClaimZone(int zoneId)
+    {
+        try
+        {
+            var result = await GameService.ClaimZoneAsync(zoneId, AppState.PlayerName);
+            if (result is not null)
+            {
+                message = $"Zone R{result.Ring}-P{result.Position} claimed!";
+                severity = Severity.Success;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            severity = Severity.Error;
+        }
+    }
+
+    async Task AttackZone(int zoneId)
+    {
+        var ships = attackShips.GetValueOrDefault(zoneId, 1);
+        try
+        {
+            var result = await GameService.AttackZoneAsync(zoneId, AppState.PlayerName, ships);
+            if (result is not null)
+            {
+                if (result.AttackerWon)
+                    message = $"Victory! Captured the zone. Lost {result.ShipsLost} ships, {result.RemainingAttackerShips} remain.";
+                else
+                    message = $"Defeated! Lost all {result.ShipsLost} ships.";
+
+                severity = result.AttackerWon ? Severity.Success : Severity.Warning;
+                await LoadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            severity = Severity.Error;
+        }
+    }
+
+    static string BoostCssClass(ResourceType type) => type switch
+    {
+        ResourceType.Metal => "default",
+        ResourceType.Energy => "warning",
+        ResourceType.Food => "success",
+        ResourceType.Water => "info",
+        _ => "default"
+    };
+}

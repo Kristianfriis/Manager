@@ -1,0 +1,21 @@
+.ring-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.zone-card {
+    width: 180px;
+    flex-shrink: 0;
+}
+
+.ring-center .zone-card {
+    width: 200px;
+    border-color: var(--mud-palette-primary) !important;
+    border-width: 2px !important;
+}
+
+.ring-outer .zone-card {
+    opacity: 0.85;
+}

@@ -22,5 +22,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddMudServices();
 
 builder.Services.AddScoped<GameService>();
+builder.Services.AddScoped<PlayerService>();
+builder.Services.AddSingleton<AppState>();
 
 await builder.Build().RunAsync();

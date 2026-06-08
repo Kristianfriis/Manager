@@ -1,7 +1,37 @@
 ﻿@page "/"
+@using Manager.Client.Services
+@inject NavigationManager Navigation
+@inject AppState AppState
 
 <PageTitle>Home</PageTitle>
 
-<h2>Hello, world!</h2>
+<MudPaper Class="pa-4 mb-4">
+    @if (string.IsNullOrWhiteSpace(AppState.PlayerName))
+    {
+        <MudText Typo="Typo.h4">Welcome to the Space Sector Manager!</MudText>
+        <MudText Typo="Typo.body1" Class="mb-4">To get started, please enter a player name below and click "Set". This will
+            be your identity in the game.</MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudTextField @bind-Value="AppState.PlayerName" Label="Player Name" Variant="Variant.Outlined" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SetPlayerName">Set</MudButton>
+            </MudStack>
+        }
+    else
+        {
+            <MudText Typo="Typo.h4">Welcome back, @AppState.PlayerName!</MudText>
+            <MudText Typo="Typo.body1" Class="mb-4">Ready to manage your fleet and conquer sectors? Click the button below to
+                view available sectors and start playing.</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo("/sectors"))">View
+                    Sectors</MudButton>
+                }
+            </MudPaper>
 
-<MudText Typo="Typo.body1">Welcome to your new app.</MudText>
+@code {
+    void SetPlayerName()
+    {
+        if (!string.IsNullOrWhiteSpace(AppState.PlayerName))
+        {
+            Navigation.NavigateTo("/sectors");
+        }
+    }
+}
