@@ -2,11 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using Manager.Api.Data;
 using Manager.Shared.Dtos;
 using Manager.Api.Data.Errors;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.WithOrigins("https://localhost:7182", "http://localhost:5071")
+    p.WithOrigins("*")
      .AllowAnyHeader().AllowAnyMethod()));
 
 builder.Services.AddDbContext<GameDbContext>(o =>
@@ -14,17 +15,17 @@ builder.Services.AddDbContext<GameDbContext>(o =>
 
 builder.Services.AddScoped<GameService>();
 builder.Services.AddOpenApi();
+builder.AddServiceDefaults();
 
 var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<GameDbContext>().Database.EnsureCreated();
 
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
-
 app.UseCors();
 app.UseHttpsRedirection();
+
+app.MapDefaultEndpoints();
 
 app.MapGet("/api/planets", async (GameService service) =>
 {
@@ -65,6 +66,9 @@ app.MapPost("/api/planets/{id:int}/upgrade", async (int id, UpgradeRequest req, 
         ? Results.Ok(planetResult.Value)
         : Results.NotFound();
 });
+
+app.MapOpenApi();
+app.MapScalarApiReference();
 
 app.Run();
 

@@ -14,9 +14,11 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.11.9" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Manager.ServiceDefaults\Manager.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Manager.Shared\Manager.Shared.csproj" />
   </ItemGroup>
 

@@ -12,7 +12,7 @@
     @foreach (var planet in planets)
     {
         <RadzenColumn Size="6">
-            <RadzenCard Style="cursor: pointer"">
+            <RadzenCard Style="cursor: pointer">
                 <RadzenStack>
                     <RadzenTextBox @bind-Value="@planet.Name" Placeholder="Planet name" Disabled="true" />
                     <RadzenButton Text="Visit" Click="@(() => VisitPlanet(planet.Id))" />
