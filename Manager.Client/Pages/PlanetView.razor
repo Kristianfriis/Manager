@@ -6,61 +6,65 @@
 
 <PageTitle>@(planet?.Name ?? "Planet")</PageTitle>
 
-<RadzenLink Path="/planets">← Back to Planets</RadzenLink>
+<MudLink Href="/planets">← Back to Planets</MudLink>
 
 @if (error is not null)
 {
-    <RadzenAlert AlertStyle="AlertStyle.Danger">@error</RadzenAlert>
+    <MudAlert Severity="Severity.Error" Class="mt-4">@error</MudAlert>
 }
 
 @if (planet is not null)
 {
-    <RadzenCard class="rz-mb-4">
-        <RadzenStack>
+    <MudCard Class="mb-4 mt-4">
+        <MudCardContent>
             <h2>@planet.Name</h2>
-            <RadzenBadge>Population: @planet.Population</RadzenBadge>
-        </RadzenStack>
-    </RadzenCard>
+            <span class="mud-chip mud-chip-text mud-chip-color-default">Population: @planet.Population</span>
+        </MudCardContent>
+    </MudCard>
 
-    <RadzenCard class="rz-mb-4">
-        <RadzenRow>
-            @foreach (var res in planet.Resources)
-            {
-                <RadzenColumn Size="3">
-                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="4">
-                        <strong>@res.Type:</strong>
-                        <RadzenBadge>@res.Amount</RadzenBadge>
-                    </RadzenStack>
-                </RadzenColumn>
-            }
-        </RadzenRow>
-    </RadzenCard>
+    <MudCard Class="mb-4">
+        <MudCardContent>
+            <MudGrid>
+                @foreach (var res in planet.Resources)
+                {
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <strong>@res.Type:</strong>
+                            <span class="mud-chip mud-chip-text mud-chip-color-default">@res.Amount</span>
+                        </MudStack>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudCardContent>
+    </MudCard>
 
-    <RadzenRow>
+    <MudGrid>
         @foreach (var prod in planet.ResourceProductions)
         {
-            <RadzenColumn Size="6">
-                <RadzenCard>
-                    <RadzenStack>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
                         <h3>@prod.Type Production</h3>
-                        <RadzenBadge>Level @prod.Level</RadzenBadge>
-                        <RadzenBadge>@prod.AmountPerHour / hour</RadzenBadge>
-                        <RadzenBadge>@prod.PerMinute.ToString("F1") / min</RadzenBadge>
-                        <RadzenBadge BadgeStyle="BadgeStyle.Danger">
+                        <span class="mud-chip mud-chip-text mud-chip-color-default">Level @prod.Level</span>
+                        <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.AmountPerHour / hour</span>
+                        <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.PerMinute.ToString("F1") / min</span>
+                        <span class="mud-chip mud-chip-text mud-chip-color-error mud-chip-color-error-text mt-2">
                             Upgrade: @prod.MetalToUpgrade Metal + @prod.EnergyNeededForUpgrade Energy
-                        </RadzenBadge>
-                        <RadzenButton Text="Upgrade"
-                                      Click="@(() => Upgrade(prod))"
-                                      Disabled="@(!CanAfford(prod))" />
-                    </RadzenStack>
-                </RadzenCard>
-            </RadzenColumn>
+                        </span>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   OnClick="@(() => Upgrade(prod))"
+                                   Disabled="@(!CanAfford(prod))" Class="mt-2">
+                            Upgrade
+                        </MudButton>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
         }
-    </RadzenRow>
+    </MudGrid>
 }
 else if (!loading)
 {
-    <RadzenAlert AlertStyle="AlertStyle.Warning">Planet not found.</RadzenAlert>
+    <MudAlert Severity="Severity.Warning" Class="mt-4">Planet not found.</MudAlert>
 }
 
 @code {

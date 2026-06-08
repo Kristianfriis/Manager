@@ -6,8 +6,6 @@
 .layout-sidebar {
     width: 260px;
     flex-shrink: 0;
-    background: var(--rz-surface);
-    border-right: 1px solid var(--rz-border-color);
     overflow-y: auto;
 }
 
@@ -23,8 +21,7 @@
     justify-content: flex-end;
     align-items: center;
     padding: 0.5rem 1.5rem;
-    border-bottom: 1px solid var(--rz-border-color);
-    background: var(--rz-base-50);
+    border-bottom: 1px solid;
 }
 
 .layout-content {

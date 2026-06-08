@@ -4,9 +4,9 @@
 
 <h2>Counter</h2>
 
-<RadzenText role="status" TextStyle="@TextStyle.Body1">Current count: @currentCount</RadzenText>
+<MudText role="status" Typo="Typo.body1">Current count: @currentCount</MudText>
 
-<RadzenButton ButtonStyle="@ButtonStyle.Primary" Click="@(args => IncrementCount())">Click me</RadzenButton>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@IncrementCount">Click me</MudButton>
 
 @code {
     private int currentCount = 0;

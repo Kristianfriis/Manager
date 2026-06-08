@@ -7,31 +7,32 @@
 
 <h2>Planets</h2>
 
-<RadzenRow>
-
+<MudGrid>
     @foreach (var planet in planets)
     {
-        <RadzenColumn Size="6">
-            <RadzenCard Style="cursor: pointer">
-                <RadzenStack>
-                    <RadzenTextBox @bind-Value="@planet.Name" Placeholder="Planet name" Disabled="true" />
-                    <RadzenButton Text="Visit" Click="@(() => VisitPlanet(planet.Id))" />
-                </RadzenStack>
-            </RadzenCard>
-        </RadzenColumn>
+        <MudItem xs="12" md="6">
+            <MudCard>
+                <MudCardContent>
+                    <MudTextField @bind-Value="@planet.Name" Placeholder="Planet name" Disabled="true" Variant="Variant.Outlined" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => VisitPlanet(planet.Id))" Class="mt-2">Visit</MudButton>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
     }
 
-    <RadzenColumn Size="6">
-        <RadzenCard>
-            <RadzenStack>
+    <MudItem xs="12" md="6">
+        <MudCard>
+            <MudCardContent>
                 <h3>Create Planet</h3>
-                <RadzenTextBox @bind-Value="@newPlanetName" Placeholder="Planet name" />
-                <RadzenButton Text="Create" Click="@CreatePlanet"
-                              Disabled="@(string.IsNullOrWhiteSpace(newPlanetName) || creating)" />
-            </RadzenStack>
-        </RadzenCard>
-    </RadzenColumn>
-</RadzenRow>
+                <MudTextField @bind-Value="@newPlanetName" Placeholder="Planet name" Variant="Variant.Outlined" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreatePlanet"
+                           Disabled="@(string.IsNullOrWhiteSpace(newPlanetName) || creating)" Class="mt-2">
+                    Create
+                </MudButton>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
 
 @code {
     string newPlanetName = "";
