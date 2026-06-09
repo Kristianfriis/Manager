@@ -1,6 +1,8 @@
 ﻿@using Manager.Client.Services
 @inject AppState AppState
 @inject LocalStorageService LocalStorage
+@inject ISnackbar Snackbar
+@inject PlayerService PlayerService
 
 <MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode" Theme="CustomThemes.Spacelabtheme"/>
 <MudDialogProvider />
@@ -24,7 +26,23 @@
         Console.WriteLine($"Retrieved player name from local storage: {storedPlayerName}");
         if (!string.IsNullOrWhiteSpace(storedPlayerName))
         {
-            AppState.SetPlayerName(storedPlayerName);
+            var (success, player, message) = await PlayerService.GetPlayerAsync(storedPlayerName);
+            if (!success)
+            {
+                Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
+                Snackbar.Add(message ?? "An error occurred while retrieving the player.", Severity.Normal);
+            }
+            else            
+            {
+                if (player == null)
+                {
+                    Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
+                    Snackbar.Add("Player data is null.", Severity.Normal);
+                    return;
+                }
+                
+                AppState.SetPlayerName(player.Name);
+            }
         }
     }
 

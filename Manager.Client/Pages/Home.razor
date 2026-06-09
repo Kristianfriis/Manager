@@ -8,6 +8,8 @@
 @inject NavigationManager Navigation
 @inject AppState AppState
 @inject LocalStorageService LocalStorage
+@inject PlayerService PlayerService
+@inject ISnackbar Snackbar
 
 <PageTitle>Home</PageTitle>
 
@@ -39,19 +41,31 @@
 
     protected override async Task OnInitializedAsync()
     {
-       AppState.OnChange += StateHasChanged;
+        AppState.OnChange += StateHasChanged;
     }
 
     async Task SetPlayerName()
     {
-        Console.WriteLine($"Player name set to: {playerName}");
-
         if (!string.IsNullOrWhiteSpace(playerName))
         {
+            var createResult = await PlayerService.CreatePlayerAsync(playerName);
 
-            await LocalStorage.SetItemAsync("PlayerName", playerName);
-            AppState.SetPlayerName(playerName);
-            Navigation.NavigateTo("/sectors");
+            if (createResult.success)
+            {
+                await LocalStorage.SetItemAsync("PlayerName", playerName);
+                AppState.SetPlayerName(playerName);
+                Navigation.NavigateTo("/sectors");
+            }
+            else
+            {
+                if(string.IsNullOrWhiteSpace(createResult.message))
+                {
+                    createResult.message = "An error occurred while creating the player.";
+                }
+                Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
+                Snackbar.Add(createResult.message, Severity.Normal);
+
+            }
         }
     }
 
