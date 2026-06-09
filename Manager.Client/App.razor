@@ -1,4 +1,8 @@
-﻿<MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode" Theme="CustomThemes.Spacelabtheme"/>
+﻿@using Manager.Client.Services
+@inject AppState AppState
+@inject LocalStorageService LocalStorage
+
+<MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode" Theme="CustomThemes.Spacelabtheme"/>
 <MudDialogProvider />
 <MudSnackbarProvider />
 
@@ -13,6 +17,16 @@
 @code {
     private bool _isDarkMode;
     private MudThemeProvider _mudThemeProvider;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var storedPlayerName = await LocalStorage.GetItemAsync<string>("PlayerName");
+        Console.WriteLine($"Retrieved player name from local storage: {storedPlayerName}");
+        if (!string.IsNullOrWhiteSpace(storedPlayerName))
+        {
+            AppState.SetPlayerName(storedPlayerName);
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

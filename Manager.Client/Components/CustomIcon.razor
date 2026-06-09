@@ -1,0 +1,50 @@
+@using Manager.Client.Models
+<span class="d-inline-flex align-items-center @Class" style="
+    width: @SizeStyle; 
+    height: @SizeStyle; 
+    color: @Color;
+    background-color: currentColor; 
+    -webkit-mask: url('icons/custom-icons/@(ToIconName(Icon)).svg') no-repeat center / contain;
+    mask: url('icons/custom-icons/@(ToIconName(Icon)).svg') no-repeat center / contain;">
+</span>
+
+@code {
+    [Parameter] public CustomIconEnum Icon { get; set; }
+    [Parameter] public int Size { get; set; } = 1;
+    [Parameter] public string Color { get; set; } = "white";
+    [Parameter] public string? Class { get; set; }
+
+    private string SizeStyle => $"{Size}em";
+
+    private static string ToIconName(CustomIconEnum icon) => icon switch
+    {
+        CustomIconEnum.None => "",
+        CustomIconEnum.Atom => "atom",
+        CustomIconEnum.Bomber => "bomber",
+        CustomIconEnum.ControlTower => "control-tower",
+        CustomIconEnum.Factory => "factory",
+        CustomIconEnum.HeavyFighter => "heavy-fighter",
+        CustomIconEnum.LightFighter => "light-fighter",
+        CustomIconEnum.MetalPlate => "metal-plate",
+        CustomIconEnum.MoonOrbit => "moon-orbit",
+        CustomIconEnum.NuclearReactor => "nuclear-plant",
+        CustomIconEnum.Oilpump => "oil-pump",
+        CustomIconEnum.Orbit => "orbit",
+        CustomIconEnum.Orbital => "orbital",
+        CustomIconEnum.PowerGenerator => "power-generator",
+        CustomIconEnum.RadarDish => "radar-dish",
+        CustomIconEnum.RingedPlanet => "ringed-planet",
+        CustomIconEnum.Sattelite => "satellite",
+        CustomIconEnum.SolarSystem => "solar-system",
+        CustomIconEnum.SpaceShip => "spaceship",
+        CustomIconEnum.SpikeyEclipse => "spikey-eclipse",
+        CustomIconEnum.StarFighter => "starfighter",
+        CustomIconEnum.TeslaTurret => "tesla-turret",
+        CustomIconEnum.World => "world",
+        CustomIconEnum.Crystal => "floating-crystal",
+        CustomIconEnum.Water => "water-drop",
+        CustomIconEnum.Ore => "ore",
+        CustomIconEnum.Energy => "battery-pack",
+        _ => throw new ArgumentOutOfRangeException(nameof(Icon), $"Unsupported icon type: {icon}")
+    };
+}

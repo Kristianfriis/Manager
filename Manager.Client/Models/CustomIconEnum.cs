@@ -1,0 +1,33 @@
+namespace Manager.Client.Models
+{
+    public enum CustomIconEnum
+    {
+        None,
+        Orbit,
+        Atom,
+        LightFighter,
+        HeavyFighter,
+        Bomber,
+        SpaceShip,
+        ControlTower,
+        Factory,
+        MetalPlate,
+        MoonOrbit,
+        Orbital,
+        PowerGenerator,
+        RadarDish,
+        RingedPlanet,
+        TeslaTurret,
+        World,
+        Sattelite,
+        StarFighter,
+        SolarSystem,
+        SpikeyEclipse,
+        NuclearReactor,
+        Oilpump,
+        Crystal,
+        Water,
+        Ore,
+        Energy
+    }
+}
