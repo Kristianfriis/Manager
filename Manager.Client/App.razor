@@ -7,6 +7,11 @@
 <MudThemeProvider @ref="_mudThemeProvider" @bind-IsDarkMode="_isDarkMode" Theme="CustomThemes.Spacelabtheme"/>
 <MudDialogProvider />
 <MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudOverlay Visible="visible" DarkBackground="true" Absolute="true">
+    <MudProgressCircular Color="Color.Secondary" Indeterminate="true" />
+</MudOverlay>
 
 <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
@@ -18,36 +23,43 @@
 
 @code {
     private bool _isDarkMode;
-    private MudThemeProvider _mudThemeProvider;
+    private MudThemeProvider? _mudThemeProvider;
+
+    private bool visible;
 
     protected override async Task OnInitializedAsync()
     {
+        visible = true;
+
+
         var storedPlayerName = await LocalStorage.GetItemAsync<string>("PlayerName");
-        Console.WriteLine($"Retrieved player name from local storage: {storedPlayerName}");
-        if (!string.IsNullOrWhiteSpace(storedPlayerName))
+        var storedPlayerId = await LocalStorage.GetItemAsync<int>("PlayerId");
+        if (!string.IsNullOrWhiteSpace(storedPlayerName) && storedPlayerId > 0)
         {
-            var (success, player, message) = await PlayerService.GetPlayerAsync(storedPlayerName);
+            Console.WriteLine($"Found stored player: {storedPlayerName} (ID: {storedPlayerId}) from App.razor");
+            var (success, player, message) = await PlayerService.GetPlayerAsync(storedPlayerId);
             if (!success)
             {
                 Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
                 Snackbar.Add(message ?? "An error occurred while retrieving the player.", Severity.Normal);
             }
-            else            
+            else if (player is not null)
             {
-                if (player == null)
-                {
-                    Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
-                    Snackbar.Add("Player data is null.", Severity.Normal);
-                    return;
-                }
-                
-                AppState.SetPlayerName(player.Name);
+                AppState.SetPlayer(player.Name, player.Id);
             }
         }
+
+        visible = false;
+        @* StateHasChanged(); *@
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if(_mudThemeProvider is null)
+        {
+            Console.WriteLine("MudThemeProvider reference is null in OnAfterRenderAsync.");
+            return;
+        }
         if (firstRender)
         {
             _isDarkMode = await _mudThemeProvider.GetSystemDarkModeAsync();

@@ -8,38 +8,26 @@ public class PlayerService(IHttpClientFactory httpFactory)
 {
     private HttpClient Api => httpFactory.CreateClient("ManagerApi");
 
-    public async Task<(bool success, string? message)> CreatePlayerAsync(string name)
+    public async Task<(bool success, PlayerDto? player, string? message)> CreatePlayerAsync(string name)
     {
-        var response = await Api.PostAsJsonAsync($"api/players", new CreatePlayerRequest(name));
+        var response = await Api.PostAsJsonAsync("api/players", new CreatePlayerRequest(name));
         if (!response.IsSuccessStatusCode)
         {
-            return (false, "Failed to create player.");
+            var body = await response.Content.ReadAsStringAsync();
+            return (false, null, string.IsNullOrWhiteSpace(body) ? "Failed to create player." : body);
         }
 
-        return (true, null);
+        var player = await response.Content.ReadFromJsonAsync<PlayerDto>();
+        return (true, player, null);
     }
 
-    public async Task<(bool success, string? message)> UpdatePlayerAsync()
+    public async Task<(bool success, PlayerDto? player, string? message)> GetPlayerAsync(int id)
     {
-        // Implement player update logic if needed
-        return (true, null);
-    }
-
-    public async Task<(bool success, string? message)> DeletePlayerAsync()
-    {
-        // Implement player deletion logic if needed
-        return (true, null);
-    }
-
-    public async Task<(bool success, PlayerDto? player, string? message)> GetPlayerAsync(string name)
-    {
-        var response = await Api.GetAsync($"api/players/{name}");
+        var response = await Api.GetAsync($"api/players/{id}");
         if (!response.IsSuccessStatusCode)
         {
             if (response.StatusCode == HttpStatusCode.NotFound)
-            {
                 return (false, null, "Player not found.");
-            }
 
             return (false, null, "Failed to retrieve player.");
         }

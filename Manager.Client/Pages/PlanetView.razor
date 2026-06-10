@@ -3,69 +3,168 @@
 @implements IDisposable
 @inject GameService GameService
 @inject NavigationManager Navigation
+@inject AppState AppState
 
 <PageTitle>@(planet?.Name ?? "Planet")</PageTitle>
 
 <MudLink Href="/planets">← Back to Planets</MudLink>
 
-@if (error is not null)
+@if (loading)
 {
-    <MudAlert Severity="Severity.Error" Class="mt-4">@error</MudAlert>
+    <MudOverlay Visible="true" DarkBackground="true">
+        <MudProgressCircular Color="Color.Secondary" Indeterminate="true" />
+    </MudOverlay>
 }
-
-@if (planet is not null)
+else
 {
-    <MudCard Class="mb-4 mt-4">
-        <MudCardContent>
-            <h2>@planet.Name</h2>
-            <span class="mud-chip mud-chip-text mud-chip-color-default">Population: @planet.Population</span>
-        </MudCardContent>
-    </MudCard>
+    @if (error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-4">@error</MudAlert>
+    }
+    @if (!string.IsNullOrEmpty(shipMessage))
+    {
+        <MudAlert Severity="@shipSeverity" Class="mt-2">@shipMessage</MudAlert>
+    }
 
-    <MudCard Class="mb-4">
-        <MudCardContent>
-            <MudGrid>
-                @foreach (var res in planet.Resources)
-                {
-                    <MudItem xs="12" sm="6" md="3">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <strong>@res.Type:</strong>
-                            <span class="mud-chip mud-chip-text mud-chip-color-default">@res.Amount</span>
-                        </MudStack>
+    @if (planet is not null)
+    {
+        <MudCard Class="mb-4 mt-4">
+            <MudCardContent>
+                <h2>@planet.Name</h2>
+                <span class="mud-chip mud-chip-text mud-chip-color-default">Population: @planet.Population</span>
+            </MudCardContent>
+        </MudCard>
+
+        <MudCard Class="mb-4">
+            <MudCardContent>
+                <MudGrid>
+                    @foreach (var res in planet.Resources)
+                    {
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <strong>@res.Type:</strong>
+                                <span class="mud-chip mud-chip-text mud-chip-color-default">@res.Amount</span>
+                            </MudStack>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+
+        <MudGrid>
+            @foreach (var prod in planet.ResourceProductions)
+            {
+                <MudItem xs="12" md="6">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudStack>
+                                <h3>@prod.Type Production</h3>
+                                <div>
+                                    <span class="mud-chip mud-chip-text mud-chip-color-default">Level @prod.Level</span>
+                                    <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.AmountPerHour / hour</span>
+                                    <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.PerMinute.ToString("F1") /
+                                        min</span>
+
+                                    </div>
+                                    <span class="mud-chip mud-chip-text mud-chip-color-error mud-chip-color-error-text mt-2">
+                                        Upgrade: @prod.MetalToUpgrade Metal + @prod.EnergyNeededForUpgrade Energy
+                                    </span>
+
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => Upgrade(prod))"
+                                               Disabled="@(!CanAfford(prod))" Class="mt-2">
+                                        @if (prod.Level == 0)
+                                        {
+                                            <span>Build</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Upgrade</span>
+                                        }
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
                     </MudItem>
                 }
             </MudGrid>
-        </MudCardContent>
-    </MudCard>
 
-    <MudGrid>
-        @foreach (var prod in planet.ResourceProductions)
-        {
-            <MudItem xs="12" md="6">
-                <MudCard>
-                    <MudCardContent>
-                        <h3>@prod.Type Production</h3>
-                        <span class="mud-chip mud-chip-text mud-chip-color-default">Level @prod.Level</span>
-                        <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.AmountPerHour / hour</span>
-                        <span class="mud-chip mud-chip-text mud-chip-color-default">@prod.PerMinute.ToString("F1") / min</span>
-                        <span class="mud-chip mud-chip-text mud-chip-color-error mud-chip-color-error-text mt-2">
-                            Upgrade: @prod.MetalToUpgrade Metal + @prod.EnergyNeededForUpgrade Energy
-                        </span>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                                   OnClick="@(() => Upgrade(prod))"
-                                   Disabled="@(!CanAfford(prod))" Class="mt-2">
-                            Upgrade
-                        </MudButton>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
+            @* Ship building section *@
+            <MudPaper Class="pa-4 mt-6">
+                <MudText Typo="Typo.h5">Shipyard</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+                    Build ships using this planet's Metal. Ships are added to your global fleet.
+                </MudText>
+
+                @if (fleet.Count > 0 || shipStats.Count > 0)
+                {
+                    @* Current fleet summary *@
+                    @if (fleet.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Your Fleet</MudText>
+                        <MudTable Items="fleet" Dense="true" Class="mb-4">
+                            <HeaderContent>
+                                <MudTh>Type</MudTh>
+                                <MudTh>Count</MudTh>
+                                <MudTh>Health</MudTh>
+                                <MudTh>Attack</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Type">@context.Type</MudTd>
+                                <MudTd DataLabel="Count">@context.Count</MudTd>
+                                <MudTd DataLabel="Health">@context.Stats?.BaseHealth</MudTd>
+                                <MudTd DataLabel="Attack">@context.Stats?.AttackDamage</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+
+                    @* Build controls per ship type *@
+                    <MudText Typo="Typo.subtitle1" Class="mt-4 mb-2">Build Ships</MudText>
+                    @foreach (var stat in shipStats)
+                    {
+                        var metal = planet.Resources.FirstOrDefault(r => r.Type == ResourceType.Metal);
+                        var currentCount = buildCounts.GetValueOrDefault(stat.Type, 1);
+                        var totalCost = currentCount * stat.MetalCost;
+                        var canBuild = metal is not null && metal.Amount >= totalCost && AppState.PlayerId > 0;
+
+                        <MudCard Outlined="true" Class="mb-2">
+                            <MudCardContent>
+                                <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.subtitle2">@stat.Name</MudText>
+                                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                            HP:@stat.BaseHealth ATK:@stat.AttackDamage SPD:@stat.Speed
+                                        </MudText>
+                                    </MudStack>
+                                    <MudNumericField @bind-Value="buildCounts[stat.Type]" Label="Qty" Min="1" Max="100"
+                                                     Variant="Variant.Outlined" Class="mt-2" Style="width: 100px" />
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2">
+                                            Cost: <strong>@totalCost</strong> Metal
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Class="@(canBuild ? "mud-success-text" : "mud-error-text")">
+                                            @(canBuild ? "Sufficient" : "Insufficient")
+                                        </MudText>
+                                    </MudStack>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => BuildShips(stat.Type))"
+                                               Disabled="@(!canBuild)">
+                                        Build @currentCount
+                                    </MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    }
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">Loading ship data...</MudAlert>
+                }
+            </MudPaper>
         }
-    </MudGrid>
-}
 else if (!loading)
-{
-    <MudAlert Severity="Severity.Warning" Class="mt-4">Planet not found.</MudAlert>
-}
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-4">Planet not found.</MudAlert>
+        }
+    }
 
 @code {
     [Parameter] public int PlanetId { get; set; }
@@ -75,11 +174,34 @@ else if (!loading)
     bool loading = true;
     CancellationTokenSource? _cts;
 
+    List<FleetDto> fleet = [];
+    List<ShipStatsDto> shipStats = [];
+    Dictionary<ShipTypeDto, int> buildCounts = [];
+    string? shipMessage;
+    Severity shipSeverity = Severity.Normal;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadPlanetAsync();
+        await LoadFleetDataAsync();
         _cts = new CancellationTokenSource();
         _ = PollAsync(_cts.Token);
+    }
+
+    async Task LoadFleetDataAsync()
+    {
+        try
+        {
+            shipStats = await GameService.GetShipStatsAsync();
+            foreach (var s in shipStats)
+                buildCounts.TryAdd(s.Type, 1);
+
+            if (AppState.PlayerId > 0)
+                fleet = await GameService.GetFleetAsync(AppState.PlayerId);
+        }
+        catch
+        {
+        }
     }
 
     async Task LoadPlanetAsync()
@@ -144,6 +266,33 @@ else if (!loading)
         catch (Exception ex)
         {
             error = ex.Message;
+        }
+    }
+
+    async Task BuildShips(ShipTypeDto type)
+    {
+        shipMessage = null;
+        var count = buildCounts.GetValueOrDefault(type, 1);
+        try
+        {
+            var result = await GameService.BuildShipsAsync(AppState.PlayerId, PlanetId, type, count);
+            if (result is not null)
+            {
+                shipMessage = $"Built {count} {type}(s)!";
+                shipSeverity = Severity.Success;
+                planet = await GameService.GetPlanetAsync(PlanetId);
+                fleet = await GameService.GetFleetAsync(AppState.PlayerId);
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            shipMessage = ex.Message;
+            shipSeverity = Severity.Error;
+        }
+        catch (Exception ex)
+        {
+            shipMessage = ex.Message;
+            shipSeverity = Severity.Error;
         }
     }
 

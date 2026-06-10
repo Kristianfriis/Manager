@@ -1,0 +1,101 @@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @(IsClaim ? "Claim" : "Attack") — R@(Zone.Ring)-P@(Zone.Position)
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+            @Zone.BoostType +@(Zone.BoostPercentage * 100)%
+            @if (Zone.IsClaimed)
+            {
+                <span>— @Zone.OwnerName (@Zone.ShipCount ships)</span>
+            }
+            else
+            {
+                <span>— Unclaimed</span>
+            }
+        </MudText>
+
+        @if (PlayerFleet.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning">No ships available. Build them at your planets first.</MudAlert>
+        }
+        else
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Ships to send:</MudText>
+
+            @foreach (var ship in PlayerFleet)
+            {
+                <MudGrid Class="mb-1" Justify="Justify.Center">
+                    <MudItem xs="5">
+                        <MudText Typo="Typo.body2">@ship.Type</MudText>
+                    </MudItem>
+                    <MudItem xs="3">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@ship.Count avail.</MudText>
+                    </MudItem>
+                    <MudItem xs="4">
+                        <MudNumericField @bind-Value="selectedCounts[ship.Type]"
+                                         Min="0"
+                                         Max="@ship.Count"
+                                         Variant="Variant.Outlined"
+                                         Class="my-0" />
+                    </MudItem>
+                </MudGrid>
+            }
+
+            <MudText Typo="Typo.body2" Class="mt-3 mud-text-secondary">
+                Total: <strong>@selectedCounts.Values.Sum()</strong> ships selected
+            </MudText>
+        }
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-2">@error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="@Cancel">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(IsClaim ? Color.Success : Color.Warning)"
+                   OnClick="@Send" Disabled="@(PlayerFleet.Count == 0)">
+            @(IsClaim ? "Claim" : "Attack")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public ZoneDto Zone { get; set; } = null!;
+    [Parameter] public List<FleetDto> PlayerFleet { get; set; } = [];
+
+    bool IsClaim => !Zone.IsClaimed;
+    Dictionary<ShipTypeDto, int> selectedCounts = [];
+    string? error;
+
+    protected override void OnInitialized()
+    {
+        foreach (var ship in PlayerFleet)
+            selectedCounts[ship.Type] = 0;
+    }
+
+    void Send()
+    {
+        error = null;
+        var composition = selectedCounts
+            .Where(kvp => kvp.Value > 0)
+            .Select(kvp => new FleetCompositionDto(kvp.Key, kvp.Value))
+            .ToList();
+
+        if (composition.Count == 0 || composition.Sum(c => c.Count) == 0)
+        {
+            error = "Select at least 1 ship.";
+            return;
+        }
+
+        MudDialog.Close(DialogResult.Ok(composition));
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Manager.Api.Data;
 
-public class PlayerService(GameDbContext context)
+public class PlayerService(GameDbContext context, GameService gameService)
 {
     public async Task<Result<PlayerDto>> GetPlayerAsync(int id)
     {
@@ -25,6 +25,9 @@ public class PlayerService(GameDbContext context)
         var player = new PlayerEntity { Name = name };
         context.Players.Add(player);
         await context.SaveChangesAsync();
+
+        // Create a starting planet for the new player
+        await gameService.CreatePlanetAsync($"Player {player.Name}'s Planet", player.Id);
 
         return Result.Ok(new PlayerDto { Id = player.Id, Name = player.Name });
     }

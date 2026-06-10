@@ -1,12 +1,13 @@
 @page "/sector/{SectorId:int}"
 @using Manager.Client.Services
+@using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Configuration
 @implements IAsyncDisposable
 @inject GameService GameService
 @inject AppState AppState
 @inject NavigationManager Navigation
-@inject MovementClient MovementClient
 @inject IConfiguration Configuration
+@inject IDialogService DialogService
 
 <PageTitle>@(sector?.Name ?? "Sector")</PageTitle>
 
@@ -14,7 +15,7 @@
 
 @if (!string.IsNullOrEmpty(message))
 {
-    <MudAlert Severity="@severity" Class="mt-4 mb-4" Dismissible="true">
+    <MudAlert Severity="@severity" Class="mt-4 mb-4">
         @message
     </MudAlert>
 }
@@ -51,13 +52,7 @@
 
                         <MudDivider Class="my-2" />
 
-                        @if (isIncoming)
-                        {
-                            <MudText Typo="Typo.body2" Class="mud-info-text">
-                                <MudIcon Icon="@Icons.Material.Filled.Flight" Size="Size.Small" /> Fleet en route…
-                            </MudText>
-                        }
-                        else if (zone.IsClaimed)
+                        @if (zone.IsClaimed)
                         {
                             <MudText Typo="Typo.body2">
                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
@@ -74,36 +69,30 @@
                             <MudText Typo="Typo.body2">0 ships</MudText>
                         }
 
-                        @if (!isIncoming && !zone.IsClaimed)
+                        @if (!zone.IsClaimed)
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Success"
-                                       OnClick="@(() => ClaimZone(zone.Id))"
-                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName))"
+                                       OnClick="@(() => OpenActionDialog(zone))"
+                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName) || fleet.Count == 0)"
                                        FullWidth="true" Class="mt-2">
-                                Claim (1 ship)
+                                Claim
                             </MudButton>
                         }
-                        else if (!isIncoming && zone.OwnerName != AppState.PlayerName && zone.IsClaimed)
+                        else if (zone.OwnerId != AppState.PlayerId && zone.IsClaimed)
                         {
-                            <MudNumericField @bind-Value="attackShips[zone.Id]"
-                                             Label="Ships"
-                                             Min="1"
-                                             Max="9999"
-                                             Variant="Variant.Outlined"
-                                             Class="mt-2" />
                             <MudButton Variant="Variant.Filled" Color="Color.Warning"
-                                       OnClick="@(() => AttackZone(zone.Id))"
-                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName))"
-                                       FullWidth="true">
+                                       OnClick="@(() => OpenActionDialog(zone))"
+                                       Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName) || fleet.Count == 0)"
+                                       FullWidth="true" Class="mt-2">
                                 Attack
                             </MudButton>
                         }
-                        else if (!isIncoming && zone.OwnerName == AppState.PlayerName)
+                        else if (zone.OwnerId == AppState.PlayerId)
                         {
-                            <MudButton Variant="Variant.Outlined" Color="Color.Default"
-                                       Disabled="true"
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                       OnClick="@(() => OpenManageDialog(zone))"
                                        FullWidth="true" Class="mt-2">
-                                Yours
+                                Manage
                             </MudButton>
                         }
                     </MudCardContent>
@@ -160,17 +149,25 @@
 
     <MudPaper Class="pa-4 mt-6">
         <MudText Typo="Typo.h6">Your Fleet</MudText>
-        <MudStack Row="true" Spacing="4" Class="mt-2">
-            <MudText Typo="Typo.body1">
-                <MudIcon Icon="@Icons.Material.Filled.Rocket" Class="mud-primary-text" /> @(player?.ShipCount ?? 0) ships
-            </MudText>
-            <MudText Typo="Typo.body1">
-                <MudIcon Icon="@Icons.Material.Filled.Hardware" Class="mud-warning-text" /> @(player?.Metal ?? 0) metal
-            </MudText>
-        </MudStack>
-        @if (player is not null)
+        @if (fleet.Count > 0)
         {
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Claiming costs 1 ship. Attacking costs however many you send.</MudText>
+            <MudStack Row="true" Spacing="4" Class="mt-2">
+                @foreach (var ship in fleet)
+                {
+                    <MudText Typo="Typo.body2">
+                        <MudIcon Icon="@Icons.Material.Filled.Rocket" Class="mud-primary-text" Size="Size.Small" />
+                        @ship.Type: @ship.Count
+                    </MudText>
+                }
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+                Total: <strong>@fleet.Sum(f => f.Count)</strong> ships
+            </MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">Claiming costs 1 ship. Attacking costs however many you send.</MudText>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mt-2">No ships yet. Build them at your planets' shipyards.</MudText>
         }
         <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo("/fleet"))" Class="mt-2">
             Manage Fleet →
@@ -186,13 +183,14 @@ else if (!loading)
     [Parameter] public int SectorId { get; set; }
 
     SectorDetailDto? sector;
-    PlayerDto? player;
     string? message;
     Severity severity = Severity.Normal;
     bool loading = true;
-    readonly Dictionary<int, int> attackShips = [];
     List<FleetMovementDto> movements = [];
+    List<FleetDto> fleet = [];
     HashSet<int> incomingZoneIds = [];
+
+    private HubConnection? hubConnection;
 
     static readonly int[] RingsInOrder = [3, 2, 1, 0];
 
@@ -205,13 +203,30 @@ else if (!loading)
         }
 
         await LoadAsync();
-        MovementClient.MovementUpdated += OnMovementUpdated;
 
         var hubUrl = Configuration.GetValue<string>("ApiBaseUrl") ?? "http://localhost:5261";
-        await MovementClient.ConnectAsync(hubUrl, AppState.PlayerName, SectorId);
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl($"{hubUrl}/hub/movements")
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On("MovementUpdated", async (SectorDetailDto sectorDetails) =>
+        {
+            sector = sectorDetails;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.Closed += async (error) =>
+        {
+            await Task.CompletedTask;
+        };
+
+        await hubConnection.StartAsync();
+        await hubConnection.InvokeAsync("JoinSectorGroup", SectorId);
     }
 
-    async Task OnMovementUpdated()
+    async Task OnMovementUpdated(SectorDetailDto sectorDetailDto)
     {
         await InvokeAsync(async () =>
         {
@@ -228,11 +243,8 @@ else if (!loading)
             sector = await GameService.GetSectorAsync(SectorId);
             if (sector is not null)
             {
-                foreach (var zone in sector.Zones)
-                    attackShips[zone.Id] = 1;
-
-                if (!string.IsNullOrWhiteSpace(AppState.PlayerName))
-                    player = await GameService.GetPlayerAsync(AppState.PlayerName);
+                if (AppState.PlayerId > 0)
+                    fleet = await GameService.GetFleetAsync(AppState.PlayerId);
 
                 await LoadMovementsAsync();
             }
@@ -250,10 +262,10 @@ else if (!loading)
 
     async Task LoadMovementsAsync()
     {
-        if (string.IsNullOrWhiteSpace(AppState.PlayerName)) return;
+        if (AppState.PlayerId <= 0) return;
         try
         {
-            movements = await GameService.GetPlayerMovementsAsync(AppState.PlayerName);
+            movements = await GameService.GetPlayerMovementsAsync(AppState.PlayerId);
             incomingZoneIds = movements
                 .Where(m => m.IsEnRoute && m.ToZoneId > 0)
                 .Select(m => m.ToZoneId)
@@ -262,23 +274,41 @@ else if (!loading)
             if (movements.Any(m => m.Resolved))
             {
                 sector = await GameService.GetSectorAsync(SectorId);
-                player = await GameService.GetPlayerAsync(AppState.PlayerName);
+                fleet = await GameService.GetFleetAsync(AppState.PlayerId);
             }
+
+            StateHasChanged();
         }
         catch
         {
         }
     }
 
-    async Task ClaimZone(int zoneId)
+    async Task OpenActionDialog(ZoneDto zone)
     {
+        var parameters = new DialogParameters<SectorActionDialog>
+        {
+            { d => d.Zone, zone },
+            { d => d.PlayerFleet, fleet }
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<SectorActionDialog>("", parameters, options);
+        var result = await dialog.Result;
+
+        if (result?.Canceled != false || result.Data is not List<FleetCompositionDto> composition)
+            return;
+
+        var isClaim = !zone.IsClaimed;
         try
         {
-            var result = await GameService.ClaimZoneAsync(zoneId, AppState.PlayerName);
-            if (result is not null)
+            FleetMovementDto? movement = isClaim
+                ? await GameService.ClaimZoneAsync(zone.Id, AppState.PlayerId, composition)
+                : await GameService.AttackZoneAsync(zone.Id, AppState.PlayerId, composition);
+
+            if (movement is not null)
             {
-                var min = (int)Math.Ceiling(result.TimeUntilArrival.TotalMinutes);
-                message = $"Fleet dispatched to R{result.Ring}-P{result.Position}! Arriving in ~{min} min.";
+                var min = (int)Math.Ceiling(movement.TimeUntilArrival.TotalMinutes);
+                message = $"Fleet dispatched to R{movement.Ring}-P{movement.Position}! Arriving in ~{min} min.";
                 severity = Severity.Info;
                 await LoadAsync();
             }
@@ -290,16 +320,30 @@ else if (!loading)
         }
     }
 
-    async Task AttackZone(int zoneId)
+    async Task OpenManageDialog(ZoneDto zone)
     {
-        var ships = attackShips.GetValueOrDefault(zoneId, 1);
+        var freshZone = await GameService.GetZoneAsync(zone.Id);
+        if (freshZone is null) return;
+
+        var parameters = new DialogParameters<ZoneDetailDialog>
+        {
+            { d => d.Zone, freshZone },
+            { d => d.PlayerFleet, fleet }
+        };
+        var options = new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+        var dialog = await DialogService.ShowAsync<ZoneDetailDialog>("", parameters, options);
+        var result = await dialog.Result;
+
+        if (result?.Canceled != false || result.Data is not List<FleetCompositionDto> composition)
+            return;
+
         try
         {
-            var result = await GameService.AttackZoneAsync(zoneId, AppState.PlayerName, ships);
-            if (result is not null)
+            var movement = await GameService.ReinforceZoneAsync(zone.Id, AppState.PlayerId, composition);
+            if (movement is not null)
             {
-                var min = (int)Math.Ceiling(result.TimeUntilArrival.TotalMinutes);
-                message = $"Attack fleet dispatched to R{result.Ring}-P{result.Position}! Arriving in ~{min} min.";
+                var min = (int)Math.Ceiling(movement.TimeUntilArrival.TotalMinutes);
+                message = $"Reinforcements dispatched to R{movement.Ring}-P{movement.Position}! Arriving in ~{min} min.";
                 severity = Severity.Info;
                 await LoadAsync();
             }
@@ -333,7 +377,9 @@ else if (!loading)
 
     public async ValueTask DisposeAsync()
     {
-        MovementClient.MovementUpdated -= OnMovementUpdated;
-        await MovementClient.DisposeAsync();
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
     }
 }

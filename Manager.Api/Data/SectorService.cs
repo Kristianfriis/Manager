@@ -4,6 +4,7 @@ using Manager.Api.Hubs;
 using Manager.Api.Models;
 using Manager.Shared.Dtos;
 using FluentResults;
+using Manager.Api.Mappers;
 
 namespace Manager.Api.Data;
 
@@ -21,7 +22,7 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
                 Id = s.Id,
                 Name = s.Name,
                 ZoneCount = s.Zones.Count,
-                ClaimedCount = s.Zones.Count(z => z.OwnerName != null)
+                ClaimedCount = s.Zones.Count(z => z.OwnerId != null)
             })
             .ToListAsync();
     }
@@ -30,11 +31,12 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
     {
         var entity = await context.Sectors
             .Include(s => s.Zones)
+                .ThenInclude(z => z.Owner)
             .FirstOrDefaultAsync(s => s.Id == id);
 
         return entity is null
             ? Result.Fail("Sector not found")
-            : Result.Ok(MapToDetail(entity));
+            : Result.Ok(entity.MapToDetail());
     }
 
     public async Task<Result<FleetMovementDto>> ClaimZoneAsync(FleetMovement model)
@@ -42,7 +44,7 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
         var zone = await context.Zones.FirstOrDefaultAsync(z => z.Id == model.ZoneId);
         if (zone is null)
             return Result.Fail("Zone not found");
-        if (zone.OwnerName is not null)
+        if (zone.OwnerId is not null)
             return Result.Fail("Zone is already claimed");
 
         var player = await context.Players.FirstOrDefaultAsync(p => p.Id == model.PlayerId);
@@ -70,6 +72,7 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
         var travelMinutes = TravelMinutesByRing[zone.Ring];
         var movement = new FleetMovementEntity
         {
+            PlayerId = player.Id,
             PlayerName = player.Name,
             ToZoneId = zone.Id,
             ShipCount = 1,
@@ -82,7 +85,52 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
         context.FleetMovements.Add(movement);
 
         await context.SaveChangesAsync();
-        var dto = MapToMovementDto(movement, zone.Ring, zone.Position);
+        var dto = movement.MapToMovementDto(zone.Ring, zone.Position);
+        await hubContext.Clients.Group($"sector_{zone.SectorId}").SendAsync("MovementUpdated");
+        return Result.Ok(dto);
+    }
+
+    public async Task<Result<FleetMovementDto>> ReinforceZoneAsync(FleetMovement model)
+    {
+        var zone = await context.Zones.FirstOrDefaultAsync(z => z.Id == model.ZoneId);
+        if (zone is null)
+            return Result.Fail("Zone not found");
+        if (zone.OwnerId != model.PlayerId)
+            return Result.Fail("You do not own this zone");
+
+        var player = await context.Players.FirstOrDefaultAsync(p => p.Id == model.PlayerId);
+        if (player is null)
+            return Result.Fail("Player not found");
+
+        var fleets = await context.Fleets.Where(f => f.PlayerId == player.Id).ToListAsync();
+
+        var checkResult = CheckFleetComposition(model.FleetComposition, fleets);
+        if (checkResult.IsFailed)
+            return checkResult;
+
+        var removeResult = RemoveFleetFromPlayer(model.FleetComposition, fleets);
+        if (removeResult.IsFailed)
+            return removeResult;
+
+        var totalShips = model.FleetComposition.Sum(fc => fc.Count);
+        var now = DateTimeOffset.UtcNow;
+        var travelMinutes = TravelMinutesByRing[zone.Ring];
+        var movement = new FleetMovementEntity
+        {
+            PlayerId = player.Id,
+            PlayerName = player.Name,
+            ToZoneId = zone.Id,
+            ShipCount = totalShips,
+            ShipsMoving = model.FleetComposition.ToDictionary(fc => fc.Type, fc => fc.Count),
+            StartTime = now,
+            ArrivalTime = now.AddMinutes(travelMinutes),
+            IsReinforce = true,
+            Resolved = false
+        };
+        context.FleetMovements.Add(movement);
+
+        await context.SaveChangesAsync();
+        var dto = movement.MapToMovementDto(zone.Ring, zone.Position);
         await hubContext.Clients.Group($"sector_{zone.SectorId}").SendAsync("MovementUpdated");
         return Result.Ok(dto);
     }
@@ -100,7 +148,6 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
 
             matchingFleet.Count -= fc.Count;
 
-            // FIX: If they have no ships left of this type, remove the row from the DB entirely
             if (matchingFleet.Count == 0)
             {
                 context.Fleets.Remove(matchingFleet);
@@ -122,29 +169,36 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
         return Result.Ok();
     }
 
-    public async Task<Result<FleetMovementDto>> AttackZoneAsync(int zoneId, string attackerName, int shipCount)
+    public async Task<Result<FleetMovementDto>> AttackZoneAsync(FleetMovement model)
     {
-        var zone = await context.Zones.FirstOrDefaultAsync(z => z.Id == zoneId);
+        var zone = await context.Zones.FirstOrDefaultAsync(z => z.Id == model.ZoneId);
         if (zone is null)
             return Result.Fail("Zone not found");
 
-        var player = await context.Players.FirstOrDefaultAsync(p => p.Name == attackerName);
+        var player = await context.Players.FirstOrDefaultAsync(p => p.Id == model.PlayerId);
         if (player is null)
             return Result.Fail("Player not found");
 
         var fleets = await context.Fleets.Where(f => f.PlayerId == player.Id).ToListAsync();
-        var totalAvailableShips = fleets.Sum(f => f.Count);
 
-        if (totalAvailableShips < shipCount || shipCount <= 0)
-            return Result.Fail("Not enough ships");
+        var checkResult = CheckFleetComposition(model.FleetComposition, fleets);
+        if (checkResult.IsFailed)
+            return checkResult;
 
+        var removeResult = RemoveFleetFromPlayer(model.FleetComposition, fleets);
+        if (removeResult.IsFailed)
+            return removeResult;
+
+        var totalShips = model.FleetComposition.Sum(fc => fc.Count);
         var now = DateTimeOffset.UtcNow;
         var travelMinutes = TravelMinutesByRing[zone.Ring];
         var movement = new FleetMovementEntity
         {
-            PlayerName = attackerName,
-            ToZoneId = zoneId,
-            ShipCount = shipCount,
+            PlayerId = player.Id,
+            PlayerName = player.Name,
+            ToZoneId = zone.Id,
+            ShipCount = totalShips,
+            ShipsMoving = model.FleetComposition.ToDictionary(fc => fc.Type, fc => fc.Count),
             StartTime = now,
             ArrivalTime = now.AddMinutes(travelMinutes),
             IsClaim = false,
@@ -153,19 +207,19 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
         context.FleetMovements.Add(movement);
 
         await context.SaveChangesAsync();
-        var dto = MapToMovementDto(movement, zone.Ring, zone.Position);
+        var dto = movement.MapToMovementDto(zone.Ring, zone.Position);
         await hubContext.Clients.Group($"sector_{zone.SectorId}").SendAsync("MovementUpdated");
         return Result.Ok(dto);
     }
 
-    public async Task<List<FleetMovementDto>> GetPlayerMovementsAsync(string? playerName)
+    public async Task<List<FleetMovementDto>> GetPlayerMovementsAsync(int? playerId)
     {
         var query = context.FleetMovements.AsQueryable();
-        if (!string.IsNullOrWhiteSpace(playerName))
-            query = query.Where(m => m.PlayerName == playerName);
+        if (playerId.HasValue)
+            query = query.Where(m => m.PlayerId == playerId.Value);
 
         var movements = await query
-            .Join(context.Zones, m => m.ToZoneId, z => z.Id, (m, z) => new { m, z })
+            .Join(context.Zones.Include(z => z.Owner), m => m.ToZoneId, z => z.Id, (m, z) => new { m, z })
             .ToListAsync();
 
         var now = DateTimeOffset.UtcNow;
@@ -190,25 +244,44 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
                 await hubContext.Clients.Group($"sector_{sectorId}").SendAsync("MovementUpdated");
         }
 
-        return movements.Select(item => MapToMovementDto(item.m, item.z.Ring, item.z.Position)).ToList();
+        return movements.Select(item => item.m.MapToMovementDto(item.z.Ring, item.z.Position)).ToList();
     }
 
-    private void ResolveMovement(FleetMovementEntity movement, ZoneEntity zone)
+    public static void ResolveMovement(FleetMovementEntity movement, ZoneEntity zone)
     {
+        if (movement.IsReinforce)
+        {
+            zone.ShipCount += movement.ShipCount;
+            foreach (var kvp in movement.ShipsMoving)
+            {
+                if (zone.ShipsInZone.ContainsKey(kvp.Key))
+                    zone.ShipsInZone[kvp.Key] += kvp.Value;
+                else
+                    zone.ShipsInZone[kvp.Key] = kvp.Value;
+            }
+            movement.Resolved = true;
+            movement.AttackerWon = true;
+            movement.RemainingAttackerShips = movement.ShipCount;
+            movement.ShipsLost = 0;
+            movement.NewOwner = zone.Owner?.Name;
+            return;
+        }
+
         if (movement.IsClaim)
         {
-            if (zone.OwnerName is not null)
+            if (zone.OwnerId is not null)
             {
                 movement.Resolved = true;
                 movement.AttackerWon = false;
                 movement.ShipsLost = movement.ShipCount;
                 movement.RemainingAttackerShips = 0;
-                movement.NewOwner = zone.OwnerName;
+                movement.NewOwner = zone.Owner?.Name;
                 return;
             }
 
-            zone.OwnerName = movement.PlayerName;
+            zone.OwnerId = movement.PlayerId;
             zone.ShipCount = movement.ShipCount;
+            zone.ShipsInZone = new Dictionary<ShipType, int>(movement.ShipsMoving);
             movement.Resolved = true;
             movement.AttackerWon = true;
             movement.ShipsLost = 0;
@@ -217,31 +290,117 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
             return;
         }
 
-        var defenderShips = zone.ShipCount;
-        var attackerWins = movement.ShipCount > defenderShips;
+        var defenderFleet = zone.ShipsInZone.Count > 0
+            ? new Dictionary<ShipType, int>(zone.ShipsInZone)
+            : new Dictionary<ShipType, int> { { ShipType.Fighter, zone.ShipCount } };
+
+        var attackerFleet = new Dictionary<ShipType, int>(movement.ShipsMoving);
+
+        if (defenderFleet.Values.Sum() <= 0)
+        {
+            zone.OwnerId = movement.PlayerId;
+            zone.ShipCount = movement.ShipCount;
+            zone.ShipsInZone = attackerFleet;
+            movement.Resolved = true;
+            movement.AttackerWon = true;
+            movement.ShipsLost = 0;
+            movement.RemainingAttackerShips = movement.ShipCount;
+            movement.NewOwner = movement.PlayerName;
+            return;
+        }
+
+        var remainingAttacker = new Dictionary<ShipType, int>(attackerFleet);
+        var remainingDefender = new Dictionary<ShipType, int>(defenderFleet);
+        SimulateCombat(remainingAttacker, remainingDefender);
+
+        var attackerRemaining = remainingAttacker.Values.Sum();
+        var defenderRemaining = remainingDefender.Values.Sum();
+        var attackerLost = movement.ShipCount - attackerRemaining;
 
         movement.Resolved = true;
-        movement.ShipsLost = attackerWins ? defenderShips : movement.ShipCount;
-        movement.RemainingAttackerShips = attackerWins ? movement.ShipCount - defenderShips : 0;
+        movement.ShipsLost = attackerLost;
+        movement.RemainingAttackerShips = attackerRemaining;
 
-        if (attackerWins)
+        if (defenderRemaining <= 0 && attackerRemaining > 0)
         {
-            zone.OwnerName = movement.PlayerName;
-            zone.ShipCount = movement.ShipCount - defenderShips;
+            zone.OwnerId = movement.PlayerId;
+            zone.ShipCount = attackerRemaining;
+            zone.ShipsInZone = remainingAttacker;
             movement.AttackerWon = true;
             movement.NewOwner = movement.PlayerName;
         }
         else
         {
-            zone.ShipCount = defenderShips - movement.ShipCount;
+            zone.ShipCount = defenderRemaining;
+            zone.ShipsInZone = remainingDefender;
             movement.AttackerWon = false;
-            movement.NewOwner = zone.OwnerName;
+            movement.NewOwner = zone.Owner?.Name;
         }
+    }
+
+    private static void SimulateCombat(Dictionary<ShipType, int> attacker, Dictionary<ShipType, int> defender)
+    {
+        while (attacker.Values.Sum() > 0 && defender.Values.Sum() > 0)
+        {
+            var atkDamage = attacker.Sum(kvp => kvp.Value * GameRules.Ships[kvp.Key].AttackDamage);
+            var defDamage = defender.Sum(kvp => kvp.Value * GameRules.Ships[kvp.Key].AttackDamage);
+
+            ApplyDamage(attacker, defDamage);
+            ApplyDamage(defender, atkDamage);
+        }
+    }
+
+    private static void ApplyDamage(Dictionary<ShipType, int> ships, int damage)
+    {
+        var sorted = ships
+            .Where(kvp => kvp.Value > 0)
+            .OrderBy(kvp => GameRules.Ships[kvp.Key].BaseHealth)
+            .ToList();
+
+        foreach (var (type, count) in sorted)
+        {
+            if (damage <= 0 || !ships.TryGetValue(type, out var current) || current <= 0)
+                continue;
+
+            var hp = GameRules.Ships[type].BaseHealth;
+            var totalHp = count * hp;
+
+            if (damage >= totalHp)
+            {
+                damage -= totalHp;
+                ships[type] = 0;
+            }
+            else
+            {
+                var shipsDestroyed = damage / hp;
+                damage -= shipsDestroyed * hp;
+                ships[type] -= shipsDestroyed;
+
+                if (damage > 0 && ships[type] > 0)
+                {
+                    ships[type]--;
+                    damage = 0;
+                }
+            }
+        }
+
+        foreach (var key in ships.Where(kvp => kvp.Value <= 0).Select(kvp => kvp.Key).ToList())
+            ships.Remove(key);
     }
 
     public static void Seed(GameDbContext ctx)
     {
         if (ctx.Sectors.Any()) return;
+
+        if (!ctx.Players.Any())
+        {
+            ctx.Players.Add(new PlayerEntity { Name = "Bot-1" });
+            ctx.Players.Add(new PlayerEntity { Name = "Bot-2" });
+        }
+
+        ctx.SaveChanges();
+
+        var bots = ctx.Players.Where(p => p.Name.StartsWith("Bot-")).ToDictionary(p => p.Name);
 
         var sector = new SectorEntity
         {
@@ -249,11 +408,22 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
             Zones = GenerateZones(12)
         };
         ctx.Sectors.Add(sector);
+        ctx.SaveChanges();
 
-        if (!ctx.Players.Any())
+        var rng = new Random(42);
+        var botNames = new[] { "Bot-1", "Bot-2" };
+        foreach (var zone in sector.Zones.Skip(1).OrderBy(_ => rng.Next()).Take(4))
         {
-            ctx.Players.Add(new PlayerEntity { Name = "Bot-1", });
-            ctx.Players.Add(new PlayerEntity { Name = "Bot-2", });
+            var botName = botNames[rng.Next(botNames.Length)];
+            zone.OwnerId = bots[botName].Id;
+            zone.ShipCount = rng.Next(3, 8);
+
+            var remainingShips = zone.ShipCount;
+            foreach (var shipType in Enum.GetValues<ShipType>())
+            {
+                zone.ShipsInZone[shipType] = rng.Next(0, remainingShips + 1);
+                remainingShips -= zone.ShipsInZone[shipType];
+            }
         }
 
         ctx.SaveChanges();
@@ -279,52 +449,6 @@ public class SectorService(GameDbContext context, ILogger<SectorService> logger,
             }
         }
 
-        var bots = new[] { "Bot-1", "Bot-2" };
-        var rng = new Random(42);
-        foreach (var zone in zones.Skip(1).OrderBy(_ => rng.Next()).Take(4))
-        {
-            zone.OwnerName = bots[rng.Next(bots.Length)];
-            zone.ShipCount = rng.Next(3, 8);
-        }
-
         return zones;
     }
-
-    private static SectorDetailDto MapToDetail(SectorEntity e) => new()
-    {
-        Id = e.Id,
-        Name = e.Name,
-        Zones = e.Zones.Select(MapZoneToDto).ToList()
-    };
-
-    private static ZoneDto MapZoneToDto(ZoneEntity z) => new()
-    {
-        Id = z.Id,
-        SectorId = z.SectorId,
-        Ring = z.Ring,
-        Position = z.Position,
-        BoostType = z.BoostType,
-        BoostPercentage = z.BoostPercentage,
-        OwnerName = z.OwnerName,
-        ShipCount = z.ShipCount
-    };
-
-    private static FleetMovementDto MapToMovementDto(FleetMovementEntity m, int ring, int pos) => new()
-    {
-        Id = m.Id,
-        PlayerName = m.PlayerName,
-        ToZoneId = m.ToZoneId,
-        Ring = ring,
-        Position = pos,
-        ShipCount = m.ShipCount,
-        StartTime = m.StartTime,
-        ArrivalTime = m.ArrivalTime,
-        IsClaim = m.IsClaim,
-        Resolved = m.Resolved,
-        AttackerWon = m.AttackerWon,
-        RemainingAttackerShips = m.RemainingAttackerShips,
-        ShipsLost = m.ShipsLost,
-        NewOwner = m.NewOwner,
-        FleetComposition = m.ShipsMoving.Select(kvp => new FleetCompositionDto((ShipTypeDto)kvp.Key, kvp.Value)).ToList()
-    };
 }

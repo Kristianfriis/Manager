@@ -25,7 +25,7 @@ public static class PlanetEndpoints
 
         group.MapPost("/", async (CreatePlanetRequest req, GameService service) =>
         {
-            var planetResult = await service.CreatePlanetAsync(req.Name);
+            var planetResult = await service.CreatePlanetAsync(req.Name, req.PlayerId);
             return planetResult.IsSuccess
                 ? Results.Created($"/api/planets/{planetResult.Value.Id}", planetResult.Value)
                 : Results.BadRequest();

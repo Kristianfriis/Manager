@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Manager.Api.Models;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Manager.Api.Data;
 
@@ -44,11 +46,38 @@ public class GameDbContext : DbContext
 
         modelBuilder.Entity<FleetMovementEntity>(e =>
         {
-            // Tells EF Core to serialize the Dictionary into a single database column named "ShipsMoving"
-            e.OwnsOne(f => f.ShipsMoving, builder =>
-            {
-                builder.ToJson();
-            });
+            e.Property(f => f.ShipsMoving)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<Dictionary<ShipType, int>>(v, (JsonSerializerOptions?)null)!);
+        });
+
+        var comparer = new ValueComparer<Dictionary<ShipType, int>>(
+        (d1, d2) =>
+            d1!.Count == d2!.Count &&
+            d1.OrderBy(x => x.Key)
+            .SequenceEqual(d2.OrderBy(x => x.Key)),
+
+        d => d.Aggregate(
+            0,
+            (a, v) => HashCode.Combine(a, v.Key, v.Value)),
+
+        d => d.ToDictionary(entry => entry.Key, entry => entry.Value)
+    );
+
+        modelBuilder.Entity<ZoneEntity>(e =>
+        {
+            e.HasOne(z => z.Owner)
+                .WithMany()
+                .HasForeignKey(z => z.OwnerId)
+                .IsRequired(false);
+
+            // Tells EF Core to serialize the Dictionary into a single database column named "ShipsInZone"
+            e.Property(x => x.ShipsInZone)
+            .HasConversion(
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                v => JsonSerializer.Deserialize<Dictionary<ShipType, int>>(v, (JsonSerializerOptions?)null)!)
+            .Metadata.SetValueComparer(comparer);
         });
     }
 }

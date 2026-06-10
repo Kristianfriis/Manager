@@ -1,4 +1,6 @@
 @page "/planets"
+@using Manager.Client.Components
+@using Manager.Client.Models
 @using Manager.Client.Services
 @inject GameService GameService
 @inject NavigationManager Navigation
@@ -7,20 +9,34 @@
 
 <h2>Planets</h2>
 
+<MudOverlay Visible="loading" DarkBackground="true">
+    <MudProgressCircular Color="Color.Secondary" Indeterminate="true" />
+</MudOverlay>
+
 <MudGrid>
     @foreach (var planet in planets)
     {
         <MudItem xs="12" md="6">
             <MudCard>
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6" Align="Align.Center">@planet.Name</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
                 <MudCardContent>
-                    <MudTextField @bind-Value="@planet.Name" Placeholder="Planet name" Disabled="true" Variant="Variant.Outlined" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => VisitPlanet(planet.Id))" Class="mt-2">Visit</MudButton>
+                    <MudStack>
+                        <MudGrid Justify="Justify.Center">
+                            <CustomIcon Icon="CustomIconEnum.World" Size="4" />
+                        </MudGrid>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => VisitPlanet(planet.Id))"
+                                   Class="mt-2">Visit</MudButton>
+                    </MudStack>
                 </MudCardContent>
             </MudCard>
         </MudItem>
     }
 
-    <MudItem xs="12" md="6">
+    @* <MudItem xs="12" md="6">
         <MudCard>
             <MudCardContent>
                 <h3>Create Planet</h3>
@@ -31,22 +47,25 @@
                 </MudButton>
             </MudCardContent>
         </MudCard>
-    </MudItem>
+    </MudItem> *@
 </MudGrid>
 
 @code {
     string newPlanetName = "";
-    bool creating;
+    @* bool creating; *@
+    bool loading = false;
     IEnumerable<PlanetLookupDto> planets = [];
 
     protected override async Task OnInitializedAsync()
     {
+        loading = true;
         planets = await GameService.ListPlanetsAsync();
+        loading = false;
     }
 
     async Task CreatePlanet()
     {
-        creating = true;
+        @* creating = true; *@
         try
         {
             var planet = await GameService.CreatePlanetAsync(newPlanetName);
@@ -55,7 +74,7 @@
         }
         finally
         {
-            creating = false;
+            @* creating = false; *@
         }
     }
 

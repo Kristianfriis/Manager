@@ -14,9 +14,9 @@ public class GameService(GameDbContext context)
         return entity == null ? Result.Fail("Planet not found") : await RecalculateAndSaveAsync(entity);
     }
 
-    public async Task<Result<PlanetDto>> CreatePlanetAsync(string name)
+    public async Task<Result<PlanetDto>> CreatePlanetAsync(string name, int playerId)
     {
-        var planet = new PlanetEntity { Name = name, Population = 10 };
+        var planet = new PlanetEntity { Name = name, Population = 10, OwnerPlayerId = playerId };
         planet.New();
 
         context.Planets.Add(planet);
@@ -72,15 +72,12 @@ public class GameService(GameDbContext context)
             return Result.Fail("Player not found");
 
 
-        const int costPerShip = 10;
-        var totalCost = count * costPerShip;
+        var shipStats = GameRules.Ships[type];
+        var totalCost = count * shipStats.MetalCost;
 
         var metal = planet.Resources.FirstOrDefault(r => r.Type == ResourceType.Metal);
         if (metal == null || metal.Amount < totalCost)
             return Result.Fail($"Not enough Metal. Need {totalCost}, have {metal?.Amount ?? 0}.");
-
-        if (metal.Amount < totalCost)
-            return Result.Fail($"Not enough Metal. Need {totalCost}, have {metal.Amount}.");
         
         var fleet = await context.Fleets.FirstOrDefaultAsync(p => p.PlayerId == player.Id && p.Type == type);
 
@@ -140,5 +137,4 @@ public class GameService(GameDbContext context)
         var planets = await context.Planets.Select(p => new PlanetLookupDto { Id = p.Id, Name = p.Name }).ToListAsync();
         return planets;
     }
-
 }

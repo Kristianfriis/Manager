@@ -19,16 +19,11 @@ public class ZoneEntity
     public int Position { get; set; }
     public ResourceType BoostType { get; set; }
     public double BoostPercentage { get; set; }
-    public string? OwnerName { get; set; }
+    public int? OwnerId { get; set; }
     public int ShipCount { get; set; }
-}
+    public Dictionary<ShipType, int> ShipsInZone { get; set; } = [];
 
-public class PlayerEntity
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = "";
-
-    public List<FleetEntity> Fleets { get; set; } = [];
+    public PlayerEntity? Owner { get; set; }
 }
 
 public class FleetEntity
@@ -43,17 +38,20 @@ public class FleetEntity
 
     [NotMapped]
     public ShipStats Stats => GameRules.Ships[Type];
+
 }
 
 public class FleetMovementEntity
 {
     public int Id { get; set; }
+    public int PlayerId { get; set; }
     public string PlayerName { get; set; } = "";
     public int ToZoneId { get; set; }
     public int ShipCount { get; set; }
     public DateTimeOffset StartTime { get; set; }
     public DateTimeOffset ArrivalTime { get; set; }
     public bool IsClaim { get; set; }
+    public bool IsReinforce { get; set; }
     public bool Resolved { get; set; }
     public bool? AttackerWon { get; set; }
     public int? RemainingAttackerShips { get; set; }

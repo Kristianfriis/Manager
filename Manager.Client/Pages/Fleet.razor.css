@@ -1,0 +1,7 @@
+.movement-enroute {
+    border-left: 4px solid var(--mud-palette-info);
+}
+
+.movement-resolved {
+    border-left: 4px solid var(--mud-palette-lines-inputs);
+}

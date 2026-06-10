@@ -6,9 +6,13 @@ public class PlanetEntity
 {
     public int Id { get; set; }
     public string Name { get; set; } = "Unnamed Planet";
+    public int OwnerPlayerId { get; set; }
     public int Population { get; set; }
+
+    // Navigation properties
     public List<ResourceEntity> Resources { get; set; } = [];
     public List<ProductionEntity> Productions { get; set; } = [];
+    public PlayerEntity? OwnerPlayer { get; set; }
   
     public PlanetEntity()
     {
@@ -44,8 +48,8 @@ public class ProductionEntity
     public int Level { get; set; }
     public DateTimeOffset LastUpdated { get; set; }
     public int BaseProduction { get; set; }
-    public int AmountPerHour => Level * BaseProduction;
-    public int PerMinute => (int)Math.Ceiling(AmountPerHour / 60.0);
+    public int PerMinute => Level == 0 ? 0 : (int)Math.Ceiling(Math.Pow(2, Level) * BaseProduction);
+    public int AmountPerHour => PerMinute * 60;
     public long MetalToUpgrade => (long)Math.Pow(2, Level) * 100;
     public long EnergyConsumption => (long)Math.Pow(2, Level) * 50;
     public long EnergyNeededForUpgrade => (long)Math.Pow(2, Level) * 50;
@@ -74,10 +78,10 @@ public class ProductionEntity
 
         BaseProduction = type switch
         {
-            ResourceType.Food => 20,
-            ResourceType.Water => 15,
-            ResourceType.Metal => 10,
-            ResourceType.Energy => 5,
+            ResourceType.Food => 2,
+            ResourceType.Water => 4,
+            ResourceType.Metal => 5,
+            ResourceType.Energy => 6,
             _ => 0
         };
     }

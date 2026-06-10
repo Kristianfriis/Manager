@@ -50,21 +50,17 @@
         {
             var createResult = await PlayerService.CreatePlayerAsync(playerName);
 
-            if (createResult.success)
+            if (createResult.success && createResult.player is not null)
             {
                 await LocalStorage.SetItemAsync("PlayerName", playerName);
-                AppState.SetPlayerName(playerName);
+                await LocalStorage.SetItemAsync("PlayerId", createResult.player.Id);
+                AppState.SetPlayer(createResult.player.Name, createResult.player.Id);
                 Navigation.NavigateTo("/sectors");
             }
             else
             {
-                if(string.IsNullOrWhiteSpace(createResult.message))
-                {
-                    createResult.message = "An error occurred while creating the player.";
-                }
                 Snackbar.Configuration.PositionClass = Defaults.Classes.Position.BottomCenter;
-                Snackbar.Add(createResult.message, Severity.Normal);
-
+                Snackbar.Add(createResult.message ?? "An error occurred while creating the player.", Severity.Normal);
             }
         }
     }

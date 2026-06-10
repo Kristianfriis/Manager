@@ -23,9 +23,11 @@ public class ZoneDto
     public int Position { get; set; }
     public ResourceType BoostType { get; set; }
     public double BoostPercentage { get; set; }
+    public int? OwnerId { get; set; }
     public string? OwnerName { get; set; }
     public int ShipCount { get; set; }
-    public bool IsClaimed => OwnerName is not null;
+    public bool IsClaimed => OwnerId is not null;
+    public FleetCompositionDto[] FleetComposition { get; set; } = [];
 }
 
 public class PlayerDto
@@ -47,6 +49,7 @@ public class AttackResultDto
 public class FleetMovementDto
 {
     public int Id { get; set; }
+    public int PlayerId { get; set; }
     public string PlayerName { get; set; } = "";
     public int ToZoneId { get; set; }
     public int Ring { get; set; }
@@ -56,6 +59,7 @@ public class FleetMovementDto
     public DateTimeOffset ArrivalTime { get; set; }
     public List<FleetCompositionDto> FleetComposition { get; set; } = [];
     public bool IsClaim { get; set; }
+    public bool IsReinforce { get; set; }
     public bool Resolved { get; set; }
     public bool? AttackerWon { get; set; }
     public int? RemainingAttackerShips { get; set; }
@@ -66,10 +70,9 @@ public class FleetMovementDto
     public TimeSpan TimeUntilArrival => ArrivalTime - DateTimeOffset.UtcNow;
 }
 
-public record CreatePlanetRequest(string Name);
+public record CreatePlanetRequest(string Name, int PlayerId);
 public record UpgradeRequest(ResourceType ResourceType);
 public record ClaimRequest(int PlayerId, List<FleetCompositionDto> Fleet);
-public record AttackRequest(string PlayerName, int ShipCount);
 public record BuildShipsRequest(int Count, ShipTypeDto ShipType, int PlanetId, int PlayerId);
 public record FleetCompositionDto(ShipTypeDto Type, int Count);
 

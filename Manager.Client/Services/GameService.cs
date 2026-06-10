@@ -40,31 +40,50 @@ public class GameService(IHttpClientFactory httpFactory)
     public async Task<SectorDetailDto?> GetSectorAsync(int id) =>
         await Api.GetFromJsonAsync<SectorDetailDto>($"api/sectors/{id}");
 
-    public async Task<FleetMovementDto?> ClaimZoneAsync(int zoneId, string playerName)
+    public async Task<FleetMovementDto?> ClaimZoneAsync(int zoneId, int playerId, List<FleetCompositionDto> fleet)
     {
-        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/claim", new { playerName });
+        var request = new ClaimRequest(playerId, fleet);
+        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/claim", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<FleetMovementDto>();
     }
 
-    public async Task<FleetMovementDto?> AttackZoneAsync(int zoneId, string playerName, int shipCount)
+    public async Task<FleetMovementDto?> AttackZoneAsync(int zoneId, int playerId, List<FleetCompositionDto> fleet)
     {
-        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/attack", new { playerName, shipCount });
+        var request = new ClaimRequest(playerId, fleet);
+        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/attack", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<FleetMovementDto>();
     }
 
-    public async Task<List<FleetMovementDto>> GetPlayerMovementsAsync(string playerName) =>
-        await Api.GetFromJsonAsync<List<FleetMovementDto>>($"api/fleet/movements?playerName={playerName}") ?? [];
+    public async Task<List<FleetMovementDto>> GetPlayerMovementsAsync(int playerId) =>
+        await Api.GetFromJsonAsync<List<FleetMovementDto>>($"api/fleet/movements?playerId={playerId}") ?? [];
 
-    public async Task<PlayerDto?> GetPlayerAsync(string name) =>
-        await Api.GetFromJsonAsync<PlayerDto>($"api/players/{name}");
+    public async Task<ZoneDto?> GetZoneAsync(int zoneId) =>
+        await Api.GetFromJsonAsync<ZoneDto>($"api/zones/{zoneId}");
 
-    public async Task<PlayerDto?> BuildShipsAsync(string playerName, int count)
-    {   
-        var request = new BuildShipsRequest(count, ShipTypeDto.Fighter, 1, 1); // TODO: pass actual ship type, planet id and player id
-        var response = await Api.PostAsJsonAsync($"api/planets/build-ships", request);
+    public async Task<FleetMovementDto?> ReinforceZoneAsync(int zoneId, int playerId, List<FleetCompositionDto> fleet)
+    {
+        var request = new ClaimRequest(playerId, fleet);
+        var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/reinforce", request);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<FleetMovementDto>();
+    }
+
+    public async Task<PlayerDto?> GetPlayerAsync(int playerId) =>
+        await Api.GetFromJsonAsync<PlayerDto>($"api/players/{playerId}");
+
+    public async Task<PlayerDto?> BuildShipsAsync(int playerId, int planetId, ShipTypeDto shipType, int count)
+    {
+        var request = new BuildShipsRequest(count, shipType, planetId, playerId);
+        var response = await Api.PostAsJsonAsync("api/planets/build-ships", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PlayerDto>();
     }
+
+    public async Task<List<FleetDto>> GetFleetAsync(int playerId) =>
+        await Api.GetFromJsonAsync<List<FleetDto>>($"api/fleet/{playerId}") ?? [];
+
+    public async Task<List<ShipStatsDto>> GetShipStatsAsync() =>
+        await Api.GetFromJsonAsync<List<ShipStatsDto>>("api/data/ship-stats") ?? [];
 }

@@ -1,12 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Manager.Api.Data;
 using Manager.Api.Hubs;
-using Manager.Shared.Dtos;
-using Manager.Api.Data.Errors;
 using Scalar.AspNetCore;
-using Microsoft.AspNetCore.Mvc;
-using Manager.Api.Models;
 using Manager.Api.Endpoints;
+using Manager.Api;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +20,8 @@ builder.Services.AddScoped<PlayerService>();
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
 builder.AddServiceDefaults();
+
+builder.Services.AddHostedService<ZoneBroadcastService>();
 
 var app = builder.Build();
 

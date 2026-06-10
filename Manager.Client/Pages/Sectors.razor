@@ -18,7 +18,7 @@ else
         @foreach (var sector in sectors)
         {
             <MudItem xs="12" md="6">
-                <MudCard OnClick="@(() => Navigation.NavigateTo($"/sector/{sector.Id}"))" Class="cursor-pointer">
+                <MudCard Class="cursor-pointer">
                     <MudCardContent>
                         <MudText Typo="Typo.h5">@sector.Name</MudText>
                         <MudStack Row="true" Spacing="2">

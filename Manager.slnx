@@ -1,9 +1,10 @@
 <Solution>
   <Folder Name="/SolutionFolder/" />
+  <Project Path="Manager.Api.Tests/Manager.Api.Tests.csproj" />
   <Project Path="Manager.Api/Manager.Api.csproj" />
-  <Project Path="Manager.AppHost\Manager.AppHost.csproj" Type="Classic C#" />
+  <Project Path="Manager.AppHost\Manager.AppHost.csproj" Type="C#" />
   <Project Path="Manager.Client/Manager.Client.csproj" />
-  <Project Path="Manager.ServiceDefaults\Manager.ServiceDefaults.csproj" Type="Classic C#" />
+  <Project Path="Manager.ServiceDefaults\Manager.ServiceDefaults.csproj" Type="C#" />
   <Project Path="Manager.Shared.Tests/Manager.Shared.Tests.csproj" />
   <Project Path="Manager.Shared/Manager.Shared.csproj" />
 </Solution>

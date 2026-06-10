@@ -4,66 +4,89 @@
 @inject NavigationManager Navigation
 @inject AppState AppState
 
-<PageTitle>Fleet Management</PageTitle>
+<PageTitle>Fleet Overview</PageTitle>
 
 @if (!string.IsNullOrEmpty(message))
 {
-    <MudAlert Severity="@severity" Class="mb-4" Dismissible="true">@message</MudAlert>
+    <MudAlert Severity="@severity" Class="mb-4">@message</MudAlert>
 }
 
-@if (player is not null)
+@if (AppState.PlayerId > 0)
 {
-    <MudGrid>
-        <MudItem xs="12" md="6">
-            <MudCard Outlined="true">
-                <MudCardContent>
-                    <MudText Typo="Typo.h5">@player.Name</MudText>
-                    <MudDivider Class="my-3" />
-                    <MudStack Spacing="2">
-                        <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Rocket" Class="mud-primary-text" /> Ships: <strong>@player.ShipCount</strong>
-                        </MudText>
-                        <MudText Typo="Typo.body1">
-                            <MudIcon Icon="@Icons.Material.Filled.Hardware" Class="mud-warning-text" /> Metal: <strong>@player.Metal</strong>
-                        </MudText>
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Each ship costs 10 Metal to build.</MudText>
-                    </MudStack>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
+    <MudText Typo="Typo.h4" Class="mb-4">@AppState.PlayerName's Fleet</MudText>
 
-        <MudItem xs="12" md="6">
-            <MudCard Outlined="true">
-                <MudCardContent>
-                    <MudText Typo="Typo.h5">Build Ships</MudText>
-                    <MudDivider Class="my-3" />
-                    <MudNumericField @bind-Value="buildCount"
-                                     Label="Number of ships"
-                                     Min="1"
-                                     Max="100"
-                                     Variant="Variant.Outlined"
-                                     Class="mb-4" />
-                    <MudText Typo="Typo.body2" Class="mb-4">
-                        Cost: <strong>@(buildCount * 10)</strong> Metal
-                        @if (player.Metal >= buildCount * 10)
+    @if (fleet.Count > 0)
+    {
+        <MudTable Items="fleet" Dense="true" Class="mb-4">
+            <HeaderContent>
+                <MudTh>Type</MudTh>
+                <MudTh>Count</MudTh>
+                <MudTh>Health</MudTh>
+                <MudTh>Attack</MudTh>
+                <MudTh>Speed</MudTh>
+                <MudTh>Metal Cost</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Type"><strong>@context.Type</strong></MudTd>
+                <MudTd DataLabel="Count">@context.Count</MudTd>
+                <MudTd DataLabel="Health">@context.Stats?.BaseHealth</MudTd>
+                <MudTd DataLabel="Attack">@context.Stats?.AttackDamage</MudTd>
+                <MudTd DataLabel="Speed">@context.Stats?.Speed</MudTd>
+                <MudTd DataLabel="Cost">@context.Stats?.MetalCost</MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Total ships: <strong>@fleet.Sum(f => f.Count)</strong>
+        </MudText>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">No ships in your fleet yet. Build ships at your planets' shipyards.</MudAlert>
+    }
+
+    @if (movements.Count > 0)
+    {
+        <MudPaper Class="pa-4 mt-4">
+            <MudText Typo="Typo.h6">Active Fleet Movements</MudText>
+            @foreach (var mv in movements.OrderBy(m => m.ArrivalTime))
+            {
+                <MudCard Outlined="true" Class="@MovementCardClass(mv)">
+                    <MudCardContent>
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Flight"
+                                     Class="@(mv.IsEnRoute ? "mud-info-text" : mv.AttackerWon == true ? "mud-success-text" : "mud-error-text")" />
+                            <MudText Typo="Typo.body2">
+                                @(mv.IsClaim ? "Claim" : "Attack") — R@(mv.Ring)-P@(mv.Position)
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @mv.ShipCount ship@(mv.ShipCount > 1 ? "s" : "")
+                            </MudText>
+                        </MudStack>
+                        @if (mv.IsEnRoute)
                         {
-                            <span class="mud-success-text"> (sufficient)</span>
+                            <MudText Typo="Typo.body2" Class="mud-info-text mt-1">
+                                Arriving in @FormatTime(mv.TimeUntilArrival)…
+                            </MudText>
                         }
-                        else
+                        else if (mv.Resolved)
                         {
-                            <span class="mud-error-text"> (insufficient)</span>
+                            <MudText Typo="Typo.body2" Class="mt-1">
+                                @if (mv.AttackerWon == true)
+                                {
+                                    <span class="mud-success-text">Victory!</span>
+                                }
+                                else
+                                {
+                                    <span class="mud-error-text">Defeated!</span>
+                                }
+                            </MudText>
                         }
-                    </MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               OnClick="@BuildShips"
-                               Disabled="@(string.IsNullOrWhiteSpace(AppState.PlayerName) || player.Metal < buildCount * 10)"
-                               FullWidth="true">
-                        <MudIcon Icon="@Icons.Material.Filled.Add" /> Build @buildCount Ship@(buildCount > 1 ? "s" : "")
-                    </MudButton>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-    </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudPaper>
+    }
 
     <MudPaper Class="pa-4 mt-4">
         <MudText Typo="Typo.h6">Quick Actions</MudText>
@@ -79,17 +102,17 @@
         </MudStack>
     </MudPaper>
 }
-else if (!string.IsNullOrWhiteSpace(AppState.PlayerName) && !loading)
+else
 {
-    <MudAlert Severity="Severity.Info" Class="mt-4">Player "@AppState.PlayerName" not found. Visit a sector to create your player first.</MudAlert>
+    <MudAlert Severity="Severity.Info" Class="mt-4">Create a player first on the home page.</MudAlert>
 }
 
 @code {
-    PlayerDto? player;
     string? message;
     Severity severity = Severity.Normal;
-    bool loading;
-    int buildCount = 1;
+    bool Loading;
+    List<FleetDto> fleet = [];
+    List<FleetMovementDto> movements = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,44 +122,34 @@ else if (!string.IsNullOrWhiteSpace(AppState.PlayerName) && !loading)
             return;
         }
 
-        await LoadPlayer();
+        await LoadFleetAsync();
     }
 
-    async Task LoadPlayer()
+    async Task LoadFleetAsync()
     {
-        if (string.IsNullOrWhiteSpace(AppState.PlayerName)) return;
-
-        loading = true;
+        Loading = true;
         try
         {
-            player = await GameService.GetPlayerAsync(AppState.PlayerName);
+            fleet = await GameService.GetFleetAsync(AppState.PlayerId);
+            movements = await GameService.GetPlayerMovementsAsync(AppState.PlayerId);
         }
         catch
         {
-            player = null;
+            message = "Failed to load fleet data.";
+            severity = Severity.Error;
         }
         finally
         {
-            loading = false;
+            Loading = false;
         }
     }
 
-    async Task BuildShips()
+    static string FormatTime(TimeSpan t)
     {
-        try
-        {
-            var result = await GameService.BuildShipsAsync(AppState.PlayerName, buildCount);
-            if (result is not null)
-            {
-                player = result;
-                message = $"Built {buildCount} ship{(buildCount > 1 ? "s" : "")}! Metal: {player.Metal}, Ships: {player.ShipCount}";
-                severity = Severity.Success;
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            message = ex.Message;
-            severity = Severity.Error;
-        }
+        if (t.TotalSeconds <= 0) return "now";
+        if (t.TotalMinutes >= 1) return $"{(int)t.TotalMinutes}m {t.Seconds}s";
+        return $"{t.Seconds}s";
     }
+
+    static string MovementCardClass(FleetMovementDto mv) => mv.Resolved ? "mb-2 movement-resolved" : "mb-2 movement-enroute";
 }
