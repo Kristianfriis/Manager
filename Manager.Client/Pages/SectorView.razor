@@ -1,8 +1,12 @@
 @page "/sector/{SectorId:int}"
 @using Manager.Client.Services
+@using Microsoft.Extensions.Configuration
+@implements IAsyncDisposable
 @inject GameService GameService
 @inject AppState AppState
 @inject NavigationManager Navigation
+@inject MovementClient MovementClient
+@inject IConfiguration Configuration
 
 <PageTitle>@(sector?.Name ?? "Sector")</PageTitle>
 
@@ -34,7 +38,8 @@
         <div class="ring-row @(ring == 0 ? "ring-center" : "") @(ring == 3 ? "ring-outer" : "")">
             @foreach (var zone in zones)
             {
-                <MudCard Class="zone-card" Outlined="true">
+                var isIncoming = incomingZoneIds.Contains(zone.Id);
+                <MudCard Class="@ZoneCardClass(isIncoming)" Outlined="true">
                     <MudCardContent>
                         <span class="mud-chip mud-chip-text mud-chip-color-@BoostCssClass(zone.BoostType) mb-2">
                             @zone.BoostType +@(zone.BoostPercentage * 100)%
@@ -46,7 +51,13 @@
 
                         <MudDivider Class="my-2" />
 
-                        @if (zone.IsClaimed)
+                        @if (isIncoming)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-info-text">
+                                <MudIcon Icon="@Icons.Material.Filled.Flight" Size="Size.Small" /> Fleet en route…
+                            </MudText>
+                        }
+                        else if (zone.IsClaimed)
                         {
                             <MudText Typo="Typo.body2">
                                 <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
@@ -63,7 +74,7 @@
                             <MudText Typo="Typo.body2">0 ships</MudText>
                         }
 
-                        @if (!zone.IsClaimed)
+                        @if (!isIncoming && !zone.IsClaimed)
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Success"
                                        OnClick="@(() => ClaimZone(zone.Id))"
@@ -72,7 +83,7 @@
                                 Claim (1 ship)
                             </MudButton>
                         }
-                        else if (zone.OwnerName != AppState.PlayerName)
+                        else if (!isIncoming && zone.OwnerName != AppState.PlayerName && zone.IsClaimed)
                         {
                             <MudNumericField @bind-Value="attackShips[zone.Id]"
                                              Label="Ships"
@@ -87,7 +98,7 @@
                                 Attack
                             </MudButton>
                         }
-                        else
+                        else if (!isIncoming && zone.OwnerName == AppState.PlayerName)
                         {
                             <MudButton Variant="Variant.Outlined" Color="Color.Default"
                                        Disabled="true"
@@ -99,6 +110,52 @@
                 </MudCard>
             }
         </div>
+    }
+
+    @* Fleet movements *@
+    @if (movements.Count > 0)
+    {
+        <MudPaper Class="pa-4 mt-6">
+            <MudText Typo="Typo.h6">Fleet Movements</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">Live updates via SignalR</MudText>
+
+            @foreach (var mv in movements.OrderBy(m => m.ArrivalTime))
+            {
+                <MudCard Outlined="true" Class="@MovementCardClass(mv)">
+                    <MudCardContent>
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Flight" Class="@(mv.IsEnRoute ? "mud-info-text" : mv.AttackerWon == true ? "mud-success-text" : "mud-error-text")" />
+                            <MudText Typo="Typo.body2">
+                                @(mv.IsClaim ? "Claim" : "Attack") — R@(mv.Ring)-P@(mv.Position)
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                @mv.ShipCount ship@(mv.ShipCount > 1 ? "s" : "")
+                            </MudText>
+                        </MudStack>
+
+                        @if (mv.IsEnRoute)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-info-text mt-1">
+                                Arriving in @FormatTime(mv.TimeUntilArrival)…
+                            </MudText>
+                        }
+                        else if (mv.Resolved)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-1">
+                                @if (mv.AttackerWon == true)
+                                {
+                                    <span class="mud-success-text">✓ Victory! @mv.RemainingAttackerShips ship@(mv.RemainingAttackerShips != 1 ? "s" : "") remaining.</span>
+                                }
+                                else
+                                {
+                                    <span class="mud-error-text">✗ Defeated! Lost @mv.ShipsLost ship@(mv.ShipsLost != 1 ? "s" : "").</span>
+                                }
+                            </MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudPaper>
     }
 
     <MudPaper Class="pa-4 mt-6">
@@ -134,6 +191,8 @@ else if (!loading)
     Severity severity = Severity.Normal;
     bool loading = true;
     readonly Dictionary<int, int> attackShips = [];
+    List<FleetMovementDto> movements = [];
+    HashSet<int> incomingZoneIds = [];
 
     static readonly int[] RingsInOrder = [3, 2, 1, 0];
 
@@ -146,6 +205,19 @@ else if (!loading)
         }
 
         await LoadAsync();
+        MovementClient.MovementUpdated += OnMovementUpdated;
+
+        var hubUrl = Configuration.GetValue<string>("ApiBaseUrl") ?? "http://localhost:5261";
+        await MovementClient.ConnectAsync(hubUrl, AppState.PlayerName, SectorId);
+    }
+
+    async Task OnMovementUpdated()
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadMovementsAsync();
+            StateHasChanged();
+        });
     }
 
     async Task LoadAsync()
@@ -161,6 +233,8 @@ else if (!loading)
 
                 if (!string.IsNullOrWhiteSpace(AppState.PlayerName))
                     player = await GameService.GetPlayerAsync(AppState.PlayerName);
+
+                await LoadMovementsAsync();
             }
         }
         catch (Exception ex)
@@ -174,6 +248,28 @@ else if (!loading)
         }
     }
 
+    async Task LoadMovementsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AppState.PlayerName)) return;
+        try
+        {
+            movements = await GameService.GetPlayerMovementsAsync(AppState.PlayerName);
+            incomingZoneIds = movements
+                .Where(m => m.IsEnRoute && m.ToZoneId > 0)
+                .Select(m => m.ToZoneId)
+                .ToHashSet();
+
+            if (movements.Any(m => m.Resolved))
+            {
+                sector = await GameService.GetSectorAsync(SectorId);
+                player = await GameService.GetPlayerAsync(AppState.PlayerName);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     async Task ClaimZone(int zoneId)
     {
         try
@@ -181,8 +277,9 @@ else if (!loading)
             var result = await GameService.ClaimZoneAsync(zoneId, AppState.PlayerName);
             if (result is not null)
             {
-                message = $"Zone R{result.Ring}-P{result.Position} claimed!";
-                severity = Severity.Success;
+                var min = (int)Math.Ceiling(result.TimeUntilArrival.TotalMinutes);
+                message = $"Fleet dispatched to R{result.Ring}-P{result.Position}! Arriving in ~{min} min.";
+                severity = Severity.Info;
                 await LoadAsync();
             }
         }
@@ -201,12 +298,9 @@ else if (!loading)
             var result = await GameService.AttackZoneAsync(zoneId, AppState.PlayerName, ships);
             if (result is not null)
             {
-                if (result.AttackerWon)
-                    message = $"Victory! Captured the zone. Lost {result.ShipsLost} ships, {result.RemainingAttackerShips} remain.";
-                else
-                    message = $"Defeated! Lost all {result.ShipsLost} ships.";
-
-                severity = result.AttackerWon ? Severity.Success : Severity.Warning;
+                var min = (int)Math.Ceiling(result.TimeUntilArrival.TotalMinutes);
+                message = $"Attack fleet dispatched to R{result.Ring}-P{result.Position}! Arriving in ~{min} min.";
+                severity = Severity.Info;
                 await LoadAsync();
             }
         }
@@ -217,6 +311,17 @@ else if (!loading)
         }
     }
 
+    static string ZoneCardClass(bool isIncoming) => isIncoming ? "zone-card zone-incoming" : "zone-card";
+
+    static string MovementCardClass(FleetMovementDto mv) => mv.Resolved ? "mb-2 movement-card movement-resolved" : "mb-2 movement-card movement-enroute";
+
+    static string FormatTime(TimeSpan t)
+    {
+        if (t.TotalSeconds <= 0) return "now";
+        if (t.TotalMinutes >= 1) return $"{(int)t.TotalMinutes}m {t.Seconds}s";
+        return $"{t.Seconds}s";
+    }
+
     static string BoostCssClass(ResourceType type) => type switch
     {
         ResourceType.Metal => "default",
@@ -225,4 +330,10 @@ else if (!loading)
         ResourceType.Water => "info",
         _ => "default"
     };
+
+    public async ValueTask DisposeAsync()
+    {
+        MovementClient.MovementUpdated -= OnMovementUpdated;
+        await MovementClient.DisposeAsync();
+    }
 }

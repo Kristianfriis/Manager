@@ -25,6 +25,7 @@ builder.Services.AddScoped<LocalStorageService>();
 
 builder.Services.AddScoped<GameService>();
 builder.Services.AddScoped<PlayerService>();
+builder.Services.AddScoped<MovementClient>();
 builder.Services.AddSingleton<AppState>();
 
 await builder.Build().RunAsync();

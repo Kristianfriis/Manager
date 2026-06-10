@@ -57,6 +57,50 @@ public class GameService(GameDbContext context)
         return Result.Ok(MapToDto(entity));
     }
 
+    public async Task<Result<PlayerDto>> BuildShipsAsync(int playerId, int count, ShipType type, int planetId)
+    {
+        if (count <= 0)
+            return Result.Fail("Must build at least 1 ship");
+
+        var planet = await QueryPlanet().FirstOrDefaultAsync(p => p.Id == planetId);
+        if (planet == null) return Result.Fail("Planet not found");
+
+        ResourceCalculator.Recalculate(planet);
+
+        var player = await context.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (player is null)
+            return Result.Fail("Player not found");
+
+
+        const int costPerShip = 10;
+        var totalCost = count * costPerShip;
+
+        var metal = planet.Resources.FirstOrDefault(r => r.Type == ResourceType.Metal);
+        if (metal == null || metal.Amount < totalCost)
+            return Result.Fail($"Not enough Metal. Need {totalCost}, have {metal?.Amount ?? 0}.");
+
+        if (metal.Amount < totalCost)
+            return Result.Fail($"Not enough Metal. Need {totalCost}, have {metal.Amount}.");
+        
+        var fleet = await context.Fleets.FirstOrDefaultAsync(p => p.PlayerId == player.Id && p.Type == type);
+
+        metal.Amount -= totalCost;
+
+        if (fleet == null)
+        {
+            fleet = new FleetEntity { PlayerId = player.Id, Type = type, Count = count };
+            context.Fleets.Add(fleet);
+        }
+        else
+        {
+            fleet.Count += count;
+        }
+    
+        await context.SaveChangesAsync();
+
+        return Result.Ok(new PlayerDto { Id = player.Id, Name = player.Name });
+    }
+
     private async Task<Result<PlanetDto>> RecalculateAndSaveAsync(PlanetEntity entity)
     {
         ResourceCalculator.Recalculate(entity);

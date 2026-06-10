@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+using Manager.Api.Data;
 using Manager.Shared.Dtos;
 
 namespace Manager.Api.Models;
@@ -25,6 +27,38 @@ public class PlayerEntity
 {
     public int Id { get; set; }
     public string Name { get; set; } = "";
+
+    public List<FleetEntity> Fleets { get; set; } = [];
+}
+
+public class FleetEntity
+{
+    public int Id { get; set; }
+    public int PlayerId { get; set; }
+    public ShipType Type { get; set; }
+    public int Count { get; set; }
+
+    // Navigation properties
+    public PlayerEntity? Player { get; set; }
+
+    [NotMapped]
+    public ShipStats Stats => GameRules.Ships[Type];
+}
+
+public class FleetMovementEntity
+{
+    public int Id { get; set; }
+    public string PlayerName { get; set; } = "";
+    public int ToZoneId { get; set; }
     public int ShipCount { get; set; }
-    public int Metal { get; set; }
+    public DateTimeOffset StartTime { get; set; }
+    public DateTimeOffset ArrivalTime { get; set; }
+    public bool IsClaim { get; set; }
+    public bool Resolved { get; set; }
+    public bool? AttackerWon { get; set; }
+    public int? RemainingAttackerShips { get; set; }
+    public int? ShipsLost { get; set; }
+    public string? NewOwner { get; set; }
+
+    public Dictionary<ShipType, int> ShipsMoving { get; set; } = [];
 }

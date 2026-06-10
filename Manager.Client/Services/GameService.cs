@@ -40,26 +40,30 @@ public class GameService(IHttpClientFactory httpFactory)
     public async Task<SectorDetailDto?> GetSectorAsync(int id) =>
         await Api.GetFromJsonAsync<SectorDetailDto>($"api/sectors/{id}");
 
-    public async Task<ZoneDto?> ClaimZoneAsync(int zoneId, string playerName)
+    public async Task<FleetMovementDto?> ClaimZoneAsync(int zoneId, string playerName)
     {
         var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/claim", new { playerName });
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<ZoneDto>();
+        return await response.Content.ReadFromJsonAsync<FleetMovementDto>();
     }
 
-    public async Task<AttackResultDto?> AttackZoneAsync(int zoneId, string playerName, int shipCount)
+    public async Task<FleetMovementDto?> AttackZoneAsync(int zoneId, string playerName, int shipCount)
     {
         var response = await Api.PostAsJsonAsync($"api/zones/{zoneId}/attack", new { playerName, shipCount });
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<AttackResultDto>();
+        return await response.Content.ReadFromJsonAsync<FleetMovementDto>();
     }
+
+    public async Task<List<FleetMovementDto>> GetPlayerMovementsAsync(string playerName) =>
+        await Api.GetFromJsonAsync<List<FleetMovementDto>>($"api/fleet/movements?playerName={playerName}") ?? [];
 
     public async Task<PlayerDto?> GetPlayerAsync(string name) =>
         await Api.GetFromJsonAsync<PlayerDto>($"api/players/{name}");
 
     public async Task<PlayerDto?> BuildShipsAsync(string playerName, int count)
-    {
-        var response = await Api.PostAsJsonAsync($"api/players/{playerName}/build-ships", new { count });
+    {   
+        var request = new BuildShipsRequest(count, ShipTypeDto.Fighter, 1, 1); // TODO: pass actual ship type, planet id and player id
+        var response = await Api.PostAsJsonAsync($"api/planets/build-ships", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<PlayerDto>();
     }

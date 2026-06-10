@@ -10,7 +10,7 @@ public class PlayerService(IHttpClientFactory httpFactory)
 
     public async Task<(bool success, string? message)> CreatePlayerAsync(string name)
     {
-        var response = await Api.PostAsJsonAsync("api/players", new { name });
+        var response = await Api.PostAsJsonAsync($"api/players", new CreatePlayerRequest(name));
         if (!response.IsSuccessStatusCode)
         {
             return (false, "Failed to create player.");

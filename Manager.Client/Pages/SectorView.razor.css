@@ -19,3 +19,17 @@
 .ring-outer .zone-card {
     opacity: 0.85;
 }
+
+.zone-incoming {
+    border-color: var(--mud-palette-info) !important;
+    border-style: dashed !important;
+    opacity: 0.7;
+}
+
+.movement-enroute {
+    border-left: 4px solid var(--mud-palette-info);
+}
+
+.movement-resolved {
+    border-left: 4px solid var(--mud-palette-lines-inputs);
+}
